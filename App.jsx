@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Dumbbell, Utensils, TrendingUp, Plus, Check, ChevronRight, Flame, Droplets, 
   Footprints, BrainCircuit, Battery, Zap, Ghost, X, Edit3, Scale, Trash2, 
-  ScanBarcode, Search, Beef, Wheat, Droplet, Activity, Moon, BarChart3, 
+  Search, Beef, Wheat, Droplet, Activity, Moon, BarChart3, 
   Calendar, Save, Info, Wand2, Camera, Loader2, GripVertical, Settings,
   History, BookOpen, Sparkles, AlertTriangle, ArrowLeft, AlertCircle, Target,
   ChefHat, Timer, HeartPulse, Bike
@@ -12,6 +12,7 @@ import {
 // 🔴 API KEY SET 🔴
 const YOUR_GEMINI_API_KEY = "AIzaSyBIeVDLmfc1BfSEuMtZIWVVdZESFehu92Q"; 
 const GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025";
+const APP_VERSION = "1.6";
 
 // --- GLOBAL STYLES ---
 const style = document.createElement('style');
@@ -124,6 +125,14 @@ function useStickyState(defaultValue, key) {
   const [value, setValue] = useState(() => {
     try {
       const stickyValue = window.localStorage.getItem(key);
+      const version = window.localStorage.getItem("GL_VERSION");
+      
+      // FORCE RESET if version doesn't match
+      if (version !== APP_VERSION) {
+         window.localStorage.setItem("GL_VERSION", APP_VERSION);
+         return defaultValue; 
+      }
+
       if (stickyValue !== null) {
         const parsed = JSON.parse(stickyValue);
         if (Array.isArray(defaultValue) && !Array.isArray(parsed)) return defaultValue;
@@ -136,7 +145,9 @@ function useStickyState(defaultValue, key) {
     return defaultValue;
   });
   useEffect(() => {
-    window.localStorage.setItem(key, JSON.stringify(value));
+    try {
+        window.localStorage.setItem(key, JSON.stringify(value));
+    } catch(e) { console.error("Storage Error", e); }
   }, [key, value]);
   return [value, setValue];
 }
@@ -275,14 +286,9 @@ const GhostChefModal = ({ isOpen, onClose, targets, currentTotals, apiKey, setTo
   const [loading, setLoading] = useState(false);
   const [suggestion, setSuggestion] = useState(null);
   
-  // Editable constraints
-  const remainingCals = Math.max(0, targets.cal - currentTotals.cal);
-  const remainingProt = Math.max(0, targets.p - currentTotals.p);
-  
-  const [reqCals, setReqCals] = useState(remainingCals);
-  const [reqProt, setReqProt] = useState(remainingProt);
+  const [reqCals, setReqCals] = useState(0);
+  const [reqProt, setReqProt] = useState(0);
 
-  // Sync state when modal opens
   useEffect(() => {
     if (isOpen) {
       setReqCals(Math.max(0, targets.cal - currentTotals.cal));
@@ -295,7 +301,6 @@ const GhostChefModal = ({ isOpen, onClose, targets, currentTotals, apiKey, setTo
   const handleGetSuggestion = async () => {
     setLoading(true);
     try {
-      // Check for strict limits
       const carbLimit = targets.c > 0 ? `Keep Carbs under ${targets.c}g.` : '';
       const fatLimit = targets.f > 0 ? `Keep Fats under ${targets.f}g.` : '';
 
@@ -409,8 +414,8 @@ const TargetEditorModal = ({ isOpen, onClose, activePhase, setActivePhase, targe
       Recommend a Calorie target and a Protein range (Min-Max).
       
       Rules:
-      1. Cut: TEE - 500kcal. Protein: 1.8-2.7g/kg.
-      2. Bulk: TEE + 300kcal. Protein: 1.6-2.2g/kg.
+      1. Cut: TEE - 500kcal. Protein: 1.8-2.7g/kg (Muscle sparing).
+      2. Bulk: TEE + 300kcal. Protein: 1.6-2.2g/kg (Sufficient).
       3. Maintain: TEE. Protein: 1.8-2.2g/kg.
       
       Ignore carbs and fats. Only focus on Calories and Protein.
@@ -701,7 +706,6 @@ const DailyCheckinModal = ({ isOpen, onClose, stats, setStats, onSave, date, set
            <div className="bg-gray-900 p-3 rounded border border-gray-700 flex justify-between items-center"><span className="text-gray-300 text-sm font-bold flex gap-2"><Calendar size={16}/> Date</span><input type="date" value={date} onChange={e => setDate(e.target.value)} className="bg-gray-800 text-white text-sm outline-none"/></div>
            <div className="flex justify-between items-center"><div className="flex gap-2 text-gray-300 items-center"><Scale size={18}/> Weight</div><div className="flex gap-2 items-center"><input type="number" value={stats.weight} onChange={e => setStats({...stats, weight: e.target.value})} className="bg-gray-900 w-20 p-2 rounded text-center text-white font-bold border border-gray-700"/><span className="text-sm text-gray-500">kg</span></div></div>
            <div className="flex justify-between items-center"><div className="flex gap-2 text-gray-300 items-center"><Footprints size={18}/> Steps</div><input type="number" value={stats.steps} onChange={e => setStats({...stats, steps: e.target.value})} className="bg-gray-900 w-24 p-2 rounded text-center text-white font-bold border border-gray-700"/></div>
-           <div className="flex justify-between items-center"><div className="flex gap-2 text-gray-300 items-center"><Droplets size={18}/> Water</div><div className="flex gap-2 items-center"><input type="number" value={stats.water} onChange={e => setStats({...stats, water: e.target.value})} className="bg-gray-900 w-20 p-2 rounded text-center text-white font-bold border border-gray-700"/><span className="text-sm text-gray-500">L</span></div></div>
            
            {/* Activity Level */}
            <div>
@@ -1168,8 +1172,6 @@ export default function App() {
   const deleteSavedMeal = (id) => setSavedMeals(savedMeals.filter(m=>m.id!==id));
   const logMeal = (meal) => { const m=meal.ingredients.reduce((a,i)=>({cal:a.cal+i.cal,p:a.p+i.p,c:a.c+i.c,f:a.f+i.f}),{cal:0,p:0,c:0,f:0}); setDailyLog([...dailyLog, {name:meal.name, totalCals:m.cal, totalP:m.p, totalC:m.c, totalF:m.f}]); setToastMsg("Meal Logged"); };
   const deleteLogItem = (i) => setDailyLog(dailyLog.filter((_,idx)=>idx!==i));
-  
-  // UPDATED SUBMIT
   const submitDailyLog = () => {
     const idx = statsHistory.findIndex(e => e.date === logDate);
     const entry = { 
