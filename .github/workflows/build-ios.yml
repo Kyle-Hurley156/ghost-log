@@ -83,6 +83,10 @@ jobs:
       - name: Build Archive
         run: |
           cd ios/App
+          # Update Pods to allow manual signing overrides
+          # This command iterates through the Pods project and disables code signing for pods
+          sed -i '' 's/CODE_SIGNING_ALLOWED = YES;/CODE_SIGNING_ALLOWED = NO;/g' Pods/Pods.xcodeproj/project.pbxproj
+          
           xcodebuild archive \
             -workspace App.xcworkspace \
             -scheme App \
@@ -106,3 +110,9 @@ jobs:
         with:
           name: GhostLog-iOS
           path: /Users/runner/work/_temp/output/App.ipa
+```
+
+### **What Changed:**
+I added a `sed` command right before the build:
+```bash
+sed -i '' 's/CODE_SIGNING_ALLOWED = YES;/CODE_SIGNING_ALLOWED = NO;/g' Pods/Pods.xcodeproj/project.pbxproj
