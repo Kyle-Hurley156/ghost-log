@@ -91,4 +91,33 @@ jobs:
           cd ios/App
           # This forces all targets in the Pods project to use the Team ID but NOT enforce a specific profile
           # This resolves the "Capacitor does not support provisioning profiles" error
-          sed -i '' "s/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = 2H8G9ZY6PP
+          sed -i '' "s/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = 2H8G9ZY6PP;/g" Pods/Pods.xcodeproj/project.pbxproj
+          sed -i '' "s/CODE_SIGN_STYLE = .*/CODE_SIGN_STYLE = Automatic;/g" Pods/Pods.xcodeproj/project.pbxproj
+          sed -i '' "s/PROVISIONING_PROFILE_SPECIFIER = .*/PROVISIONING_PROFILE_SPECIFIER = \"\";/g" Pods/Pods.xcodeproj/project.pbxproj
+
+      - name: Build Archive
+        run: |
+          cd ios/App
+          xcodebuild archive \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -sdk iphoneos \
+            -configuration Release \
+            -archivePath $RUNNER_TEMP/GhostLog.xcarchive \
+            CODE_SIGN_STYLE=Manual \
+            PROVISIONING_PROFILE_SPECIFIER="GhostLog App Store" \
+            DEVELOPMENT_TEAM="2H8G9ZY6PP" \
+            CODE_SIGN_IDENTITY="iPhone Distribution"
+
+      - name: Export IPA
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath $RUNNER_TEMP/GhostLog.xcarchive \
+            -exportOptionsPlist ios/App/ExportOptions.plist \
+            -exportPath $RUNNER_TEMP/output
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: GhostLog-iOS
+          path: /Users/runner/work/_temp/output/App.ipa
