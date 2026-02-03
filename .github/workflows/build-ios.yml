@@ -86,14 +86,20 @@ jobs:
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles/
 
-      - name: Fix Pods Signing
+      - name: Inject Signing Settings
         run: |
           cd ios/App
-          # This forces all targets in the Pods project to use the Team ID but NOT enforce a specific profile
-          # This resolves the "Capacitor does not support provisioning profiles" error
+          
+          # 1. Fix the PODS (Helper Libraries)
+          # We tell Pods to use your Team ID, but keep signing AUTOMATIC so they don't ask for a profile.
           sed -i '' "s/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = 2H8G9ZY6PP;/g" Pods/Pods.xcodeproj/project.pbxproj
           sed -i '' "s/CODE_SIGN_STYLE = .*/CODE_SIGN_STYLE = Automatic;/g" Pods/Pods.xcodeproj/project.pbxproj
           sed -i '' "s/PROVISIONING_PROFILE_SPECIFIER = .*/PROVISIONING_PROFILE_SPECIFIER = \"\";/g" Pods/Pods.xcodeproj/project.pbxproj
+          
+          # 2. Fix the MAIN APP
+          # We specifically find the Bundle ID line in the App project and inject your Profile Name right next to it.
+          # This ensures ONLY the main app gets the manual profile.
+          sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER = com.ghostlog.app;/PRODUCT_BUNDLE_IDENTIFIER = com.ghostlog.app; PROVISIONING_PROFILE_SPECIFIER = "GhostLog App Store"; CODE_SIGN_STYLE = Manual; DEVELOPMENT_TEAM = 2H8G9ZY6PP;/g' App.xcodeproj/project.pbxproj
 
       - name: Build Archive
         run: |
@@ -104,10 +110,9 @@ jobs:
             -sdk iphoneos \
             -configuration Release \
             -archivePath $RUNNER_TEMP/GhostLog.xcarchive \
-            CODE_SIGN_STYLE=Manual \
-            PROVISIONING_PROFILE_SPECIFIER="GhostLog App Store" \
-            DEVELOPMENT_TEAM="2H8G9ZY6PP" \
             CODE_SIGN_IDENTITY="iPhone Distribution"
+            # NOTE: We removed the PROVISIONING_PROFILE_SPECIFIER flag from here.
+            # It is now handled by the 'Inject Signing Settings' step above.
 
       - name: Export IPA
         run: |
