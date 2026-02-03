@@ -47,6 +47,12 @@ jobs:
               <key>com.ghostlog.app</key>
               <string>GhostLog App Store</string>
             </dict>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>stripSwiftSymbols</key>
+            <true/>
+            <key>compileBitcode</key>
+            <false/>
           </dict>
           </plist>
           EOF
@@ -80,33 +86,9 @@ jobs:
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles/
 
-      - name: Build Archive
+      - name: Fix Pods Signing
         run: |
           cd ios/App
-          # Update Pods to allow manual signing overrides
-          # This command iterates through the Pods project and disables code signing for pods
-          sed -i '' 's/CODE_SIGNING_ALLOWED = YES;/CODE_SIGNING_ALLOWED = NO;/g' Pods/Pods.xcodeproj/project.pbxproj
-          
-          xcodebuild archive \
-            -workspace App.xcworkspace \
-            -scheme App \
-            -sdk iphoneos \
-            -configuration Release \
-            -archivePath $RUNNER_TEMP/GhostLog.xcarchive \
-            CODE_SIGN_STYLE=Manual \
-            PROVISIONING_PROFILE_SPECIFIER="GhostLog App Store" \
-            DEVELOPMENT_TEAM="2H8G9ZY6PP" \
-            CODE_SIGN_IDENTITY="iPhone Distribution"
-
-      - name: Export IPA
-        run: |
-          xcodebuild -exportArchive \
-            -archivePath $RUNNER_TEMP/GhostLog.xcarchive \
-            -exportOptionsPlist ios/App/ExportOptions.plist \
-            -exportPath $RUNNER_TEMP/output
-
-      - name: Upload IPA
-        uses: actions/upload-artifact@v4
-        with:
-          name: GhostLog-iOS
-          path: /Users/runner/work/_temp/output/App.ipa
+          # This forces all targets in the Pods project to use the Team ID but NOT enforce a specific profile
+          # This resolves the "Capacitor does not support provisioning profiles" error
+          sed -i '' "s/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = 2H8G9ZY6PP
