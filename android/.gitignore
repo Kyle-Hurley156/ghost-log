@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.DS_Store
+.env
+android/.gradle
+android/local.properties
+android/*/build
+android/.idea
+*.iml
+ios/App/App.xcworkspace/xcuserdata
+ios/App/Pods
+ios/.DS_Store
+ios/DerivedData
+capacitor.config.json.timestamp
