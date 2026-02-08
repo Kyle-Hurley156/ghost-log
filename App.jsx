@@ -5,14 +5,14 @@ import {
   Search, Beef, Wheat, Droplet, Activity, Moon, BarChart3, 
   Calendar, Save, Info, Wand2, Camera, Loader2, GripVertical, Settings,
   History, BookOpen, Sparkles, AlertTriangle, ArrowLeft, AlertCircle, Target,
-  ChefHat, Timer, HeartPulse, Bike
+  ChefHat, Timer, HeartPulse
 } from 'lucide-react';
 
 // --- CONFIGURATION ---
 // 🔴 API KEY SET 🔴
 const YOUR_GEMINI_API_KEY = "AIzaSyBIeVDLmfc1BfSEuMtZIWVVdZESFehu92Q"; 
 const GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025";
-const APP_VERSION = "1.6";
+const APP_VERSION = "1.8"; 
 
 // --- GLOBAL STYLES ---
 const style = document.createElement('style');
@@ -24,7 +24,7 @@ style.innerHTML = `
 `;
 document.head.appendChild(style);
 
-// --- DATABASES ---
+// --- EXERCISE DICTIONARY ---
 const EXERCISE_DATABASE = [
   "Ab Wheel Rollout", "Adductor Machine", "Arnold Press", "Back Extension", "Barbell Bench Press", "Barbell Bicep Curl", "Barbell Row", "Barbell Shrug", "Barbell Squat",
   "Battle Ropes", "Bench Dip", "Box Jump", "Bulgarian Split Squat", "Burpees", "Cable Crossover", "Cable Crunch", "Cable Row", "Calf Press",
@@ -89,7 +89,6 @@ const calculateSetTarget = (lastWeight, lastReps, phase, readiness) => {
   let targetWeight = parseFloat(lastWeight);
   let targetReps = parseFloat(lastReps);
 
-  // Phase Logic
   if (phase === 'BULK') { 
     if (lastReps >= 10) targetWeight += 2.5; else targetReps += 1; 
   } else if (phase === 'CUT') { 
@@ -99,10 +98,8 @@ const calculateSetTarget = (lastWeight, lastReps, phase, readiness) => {
     if (lastReps >= 12) targetWeight += 2.5; 
   }
 
-  // Readiness Logic
   if (readiness < 40) targetWeight = Math.min(targetWeight, parseFloat(lastWeight)); 
   else if (readiness > 85 && targetWeight === parseFloat(lastWeight)) targetReps += 1;
-  
   return { weight: targetWeight, reps: targetReps };
 };
 
@@ -139,16 +136,10 @@ function useStickyState(defaultValue, key) {
         if (typeof defaultValue === 'object' && !Array.isArray(defaultValue) && (Array.isArray(parsed) || typeof parsed !== 'object')) return defaultValue;
         return parsed;
       }
-    } catch (e) {
-      console.warn("GhostLog: Resetting corrupted state for", key);
-    }
+    } catch (e) { console.warn("Resetting state for", key); }
     return defaultValue;
   });
-  useEffect(() => {
-    try {
-        window.localStorage.setItem(key, JSON.stringify(value));
-    } catch(e) { console.error("Storage Error", e); }
-  }, [key, value]);
+  useEffect(() => { try { window.localStorage.setItem(key, JSON.stringify(value)); } catch(e){} }, [key, value]);
   return [value, setValue];
 }
 
@@ -168,15 +159,10 @@ const INITIAL_TARGETS = {
 // --- SUB COMPONENTS ---
 
 const Toast = ({ message, onClose }) => {
-  useEffect(() => {
-    const timer = setTimeout(onClose, 3000);
-    return () => clearTimeout(timer);
-  }, [onClose]);
-  
+  useEffect(() => { const timer = setTimeout(onClose, 3000); return () => clearTimeout(timer); }, [onClose]);
   return (
     <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-2xl border border-gray-700 z-[60] animate-in fade-in slide-in-from-bottom-4 flex items-center gap-3 pointer-events-none whitespace-nowrap">
-      <Info size={18} className="text-blue-400"/>
-      <span className="text-sm font-medium">{message}</span>
+      <Info size={18} className="text-blue-400"/><span className="text-sm font-medium">{message}</span>
     </div>
   );
 };
@@ -186,203 +172,64 @@ const ConfirmModal = ({ isOpen, message, onConfirm, onCancel }) => {
   return (
     <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4 animate-in fade-in">
       <div className="bg-gray-800 w-full max-w-xs rounded-2xl p-6 border border-gray-700 shadow-2xl text-center">
-        <AlertTriangle size={48} className="text-red-500 mx-auto mb-4"/>
-        <h3 className="text-lg font-bold text-white mb-2">Are you sure?</h3>
-        <p className="text-sm text-gray-400 mb-6">{message}</p>
-        <div className="flex gap-3">
-          <button onClick={onCancel} className="flex-1 bg-gray-700 text-white py-3 rounded-xl font-bold">Cancel</button>
-          <button onClick={onConfirm} className="flex-1 bg-red-600 text-white py-3 rounded-xl font-bold">Yes</button>
-        </div>
+        <AlertTriangle size={48} className="text-red-500 mx-auto mb-4"/><h3 className="text-lg font-bold text-white mb-2">Are you sure?</h3><p className="text-sm text-gray-400 mb-6">{message}</p>
+        <div className="flex gap-3"><button onClick={onCancel} className="flex-1 bg-gray-700 text-white py-3 rounded-xl font-bold">Cancel</button><button onClick={onConfirm} className="flex-1 bg-red-600 text-white py-3 rounded-xl font-bold">Yes</button></div>
       </div>
     </div>
   );
 };
 
-// --- CARDIO MODAL ---
 const CardioModal = ({ isOpen, onClose, onSave }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState('');
   const [duration, setDuration] = useState('');
   const [calories, setCalories] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
-
-  const filteredCardio = useMemo(() => {
-    if (!searchTerm) return CARDIO_DATABASE;
-    return CARDIO_DATABASE.filter(c => c.toLowerCase().includes(searchTerm.toLowerCase()));
-  }, [searchTerm]);
-
-  const handleSelect = (type) => {
-    setSelectedType(type);
-    setSearchTerm(type);
-    setShowSuggestions(false);
-  };
-
+  const filteredCardio = useMemo(() => !searchTerm ? CARDIO_DATABASE : CARDIO_DATABASE.filter(c => c.toLowerCase().includes(searchTerm.toLowerCase())), [searchTerm]);
+  const handleSelect = (type) => { setSelectedType(type); setSearchTerm(type); setShowSuggestions(false); };
   if (!isOpen) return null;
-
-  const handleSave = () => {
-    if (!duration || !calories || !selectedType) return;
-    onSave({ type: 'Cardio', name: selectedType, duration: parseFloat(duration), calories: parseFloat(calories) });
-    setDuration(''); setCalories(''); setSearchTerm(''); setSelectedType(''); onClose();
-  };
-
+  const handleSave = () => { if (!duration || !calories || !selectedType) return; onSave({ type: 'Cardio', name: selectedType, duration: parseFloat(duration), calories: parseFloat(calories) }); setDuration(''); setCalories(''); setSearchTerm(''); setSelectedType(''); onClose(); };
   return (
     <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 animate-in fade-in">
       <div className="bg-gray-800 w-full max-w-xs rounded-2xl p-6 border border-gray-700 shadow-2xl">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-black italic text-white uppercase flex items-center gap-2"><HeartPulse className="text-red-500"/> CARDIO</h3>
-          <button onClick={onClose}><X size={24} className="text-gray-500"/></button>
-        </div>
-
+        <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-black italic text-white uppercase flex items-center gap-2"><HeartPulse className="text-red-500"/> CARDIO</h3><button onClick={onClose}><X size={24} className="text-gray-500"/></button></div>
         <div className="space-y-4">
-          <div className="relative">
-            <label className="text-xs text-gray-400 font-bold uppercase mb-2 block">Activity</label>
-            <div className="flex items-center gap-2 bg-gray-900 p-3 rounded-lg border border-gray-600">
-               <Search size={16} className="text-gray-500"/>
-               <input 
-                 type="text" 
-                 placeholder="Search (e.g. Running)" 
-                 value={searchTerm}
-                 onChange={(e) => { setSearchTerm(e.target.value); setShowSuggestions(true); setSelectedType(e.target.value); }}
-                 onFocus={() => setShowSuggestions(true)}
-                 className="bg-transparent text-white text-sm w-full outline-none"
-               />
-            </div>
-            {showSuggestions && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-600 rounded-lg max-h-40 overflow-y-auto z-20 shadow-xl">
-                {filteredCardio.map((c, i) => (
-                  <div key={i} onClick={() => handleSelect(c)} className="p-3 text-sm text-white hover:bg-gray-700 cursor-pointer border-b border-gray-700 last:border-0">
-                    {c}
-                  </div>
-                ))}
-                {filteredCardio.length === 0 && (
-                   <div onClick={() => handleSelect(searchTerm)} className="p-3 text-sm text-blue-400 hover:bg-gray-700 cursor-pointer italic">
-                     Use custom: "{searchTerm}"
-                   </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="flex gap-3">
-            <div className="flex-1">
-               <label className="text-xs text-gray-400 font-bold uppercase mb-1 block">Time (min)</label>
-               <input type="number" value={duration} onChange={e => setDuration(e.target.value)} className="w-full bg-gray-900 p-3 rounded-lg text-white font-bold text-center border border-gray-600 outline-none"/>
-            </div>
-            <div className="flex-1">
-               <label className="text-xs text-gray-400 font-bold uppercase mb-1 block">Calories</label>
-               <input type="number" value={calories} onChange={e => setCalories(e.target.value)} className="w-full bg-gray-900 p-3 rounded-lg text-white font-bold text-center border border-gray-600 outline-none"/>
-            </div>
-          </div>
+          <div className="relative"><label className="text-xs text-gray-400 font-bold uppercase mb-2 block">Activity</label><div className="flex items-center gap-2 bg-gray-900 p-3 rounded-lg border border-gray-600"><Search size={16} className="text-gray-500"/><input type="text" placeholder="Search (e.g. Running)" value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setShowSuggestions(true); setSelectedType(e.target.value); }} onFocus={() => setShowSuggestions(true)} className="bg-transparent text-white text-sm w-full outline-none"/></div>
+          {showSuggestions && (<div className="absolute top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-600 rounded-lg max-h-40 overflow-y-auto z-20 shadow-xl">{filteredCardio.map((c, i) => <div key={i} onClick={() => handleSelect(c)} className="p-3 text-sm text-white hover:bg-gray-700 cursor-pointer border-b border-gray-700 last:border-0">{c}</div>)}
+           {filteredCardio.length === 0 && <div onClick={() => handleSelect(searchTerm)} className="p-3 text-sm text-blue-400 hover:bg-gray-700 cursor-pointer italic">Use custom: "{searchTerm}"</div>}</div>)}</div>
+          <div className="flex gap-3"><div className="flex-1"><label className="text-xs text-gray-400 font-bold uppercase mb-1 block">Time (min)</label><input type="number" value={duration} onChange={e => setDuration(e.target.value)} className="w-full bg-gray-900 p-3 rounded-lg text-white font-bold text-center border border-gray-600 outline-none"/></div><div className="flex-1"><label className="text-xs text-gray-400 font-bold uppercase mb-1 block">Calories</label><input type="number" value={calories} onChange={e => setCalories(e.target.value)} className="w-full bg-gray-900 p-3 rounded-lg text-white font-bold text-center border border-gray-600 outline-none"/></div></div>
         </div>
-
         <button onClick={handleSave} className="w-full mt-6 bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-xl">LOG SESSION</button>
       </div>
     </div>
   );
 };
 
-// --- GHOST CHEF MODAL ---
 const GhostChefModal = ({ isOpen, onClose, targets, currentTotals, apiKey, setToast }) => {
   const [loading, setLoading] = useState(false);
   const [suggestion, setSuggestion] = useState(null);
-  
   const [reqCals, setReqCals] = useState(0);
   const [reqProt, setReqProt] = useState(0);
-
-  useEffect(() => {
-    if (isOpen) {
-      setReqCals(Math.max(0, targets.cal - currentTotals.cal));
-      setReqProt(Math.max(0, targets.p - currentTotals.p));
-    }
-  }, [isOpen, targets, currentTotals]);
-
+  useEffect(() => { if (isOpen) { setReqCals(Math.max(0, targets.cal - currentTotals.cal)); setReqProt(Math.max(0, targets.p - currentTotals.p)); } }, [isOpen, targets, currentTotals]);
   if (!isOpen) return null;
-
   const handleGetSuggestion = async () => {
     setLoading(true);
     try {
       const carbLimit = targets.c > 0 ? `Keep Carbs under ${targets.c}g.` : '';
       const fatLimit = targets.f > 0 ? `Keep Fats under ${targets.f}g.` : '';
-
-      const prompt = `I need a high-protein meal or snack idea.
-      Target: approx ${reqCals} calories and ${reqProt}g protein.
-      Constraints: ${carbLimit} ${fatLimit}
-      Style: Fancy/Gourmet but simple to make.
-      
-      Return JSON only:
-      {
-        "mealName": "Name of fancy meal",
-        "ingredients": ["List of ingredients with exact amounts"],
-        "macros": { "cal": number, "p": number, "c": number, "f": number },
-        "reason": "Why this fits the macros perfectly"
-      }`;
-
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-      });
+      const prompt = `I need a high-protein meal or snack idea. Target: approx ${reqCals} calories and ${reqProt}g protein. Constraints: ${carbLimit} ${fatLimit}. Style: Fancy/Gourmet but simple. Return JSON only: {"mealName": "Name", "ingredients": ["List with amounts"], "macros": {"cal": number, "p": number, "c": number, "f": number}, "reason": "Why fits"}`;
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
       const data = await response.json();
-      const result = parseAIResponse(data.candidates[0].content.parts[0].text);
-      setSuggestion(result);
-    } catch (e) { setToast("Ghost Chef is busy."); }
+      setSuggestion(parseAIResponse(data.candidates[0].content.parts[0].text));
+    } catch (e) { setToast("Ghost Chef Error: " + e.message); }
     setLoading(false);
   };
-
   return (
     <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 animate-in fade-in">
       <div className="bg-gray-800 w-full max-w-sm rounded-2xl p-6 border border-gray-700 shadow-2xl">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-black italic text-white flex items-center gap-2"><ChefHat className="text-blue-400"/> GHOST CHEF</h3>
-          <button onClick={onClose}><X size={24} className="text-gray-500"/></button>
-        </div>
-
-        <div className="bg-gray-900 p-4 rounded-xl mb-4">
-           <p className="text-gray-400 text-xs uppercase font-bold text-center mb-2">Meal Requirements</p>
-           <div className="flex gap-3">
-              <div className="flex-1">
-                 <label className="text-[10px] text-gray-500 block mb-1">CALORIES</label>
-                 <input type="number" value={reqCals} onChange={(e) => setReqCals(parseInt(e.target.value)||0)} className="w-full bg-gray-800 text-white text-center font-bold p-2 rounded border border-gray-600"/>
-              </div>
-              <div className="flex-1">
-                 <label className="text-[10px] text-gray-500 block mb-1">PROTEIN (g)</label>
-                 <input type="number" value={reqProt} onChange={(e) => setReqProt(parseInt(e.target.value)||0)} className="w-full bg-gray-800 text-white text-center font-bold p-2 rounded border border-gray-600"/>
-              </div>
-           </div>
-           {(targets.c > 0 || targets.f > 0) && (
-             <div className="mt-2 text-[10px] text-gray-500 text-center italic">
-               *Strict limits active: Max {targets.c > 0 ? `${targets.c}C` : ''} {targets.f > 0 ? `${targets.f}F` : ''}
-             </div>
-           )}
-        </div>
-
-        {!suggestion && (
-          <button 
-            onClick={handleGetSuggestion}
-            disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2"
-          >
-            {loading ? <Loader2 className="animate-spin"/> : <><Sparkles size={18}/> GENERATE RECIPE</>}
-          </button>
-        )}
-
-        {suggestion && (
-          <div className="space-y-4 animate-in slide-in-from-bottom-4">
-            <div className="bg-gray-700/50 p-4 rounded-xl border border-gray-600">
-              <h4 className="text-lg font-bold text-white mb-1">{suggestion.mealName}</h4>
-              <p className="text-xs text-blue-200 italic mb-3">{suggestion.reason}</p>
-              <ul className="text-sm text-gray-300 list-disc pl-4 space-y-1 mb-3">
-                {suggestion.ingredients.map((ing, i) => <li key={i}>{ing}</li>)}
-              </ul>
-              <div className="flex gap-3 text-xs font-mono border-t border-gray-600 pt-2">
-                <span className="text-white">{suggestion.macros.cal} kcal</span>
-                <span className="text-red-300">{suggestion.macros.p}p</span>
-                <span className="text-orange-300">{suggestion.macros.c}c</span>
-                <span className="text-yellow-300">{suggestion.macros.f}f</span>
-              </div>
-            </div>
-            <button onClick={handleGetSuggestion} className="w-full bg-gray-700 text-gray-300 py-3 rounded-xl font-bold text-xs">TRY ANOTHER</button>
-          </div>
-        )}
+        <div className="flex justify-between items-center mb-4"><h3 className="text-xl font-black italic text-white flex items-center gap-2"><ChefHat className="text-blue-400"/> GHOST CHEF</h3><button onClick={onClose}><X size={24} className="text-gray-500"/></button></div>
+        <div className="bg-gray-900 p-4 rounded-xl mb-4 text-center"><p className="text-gray-400 text-xs uppercase font-bold">Budget Remaining</p><div className="flex justify-center gap-4 mt-2"><div><span className="text-xl font-bold text-white">{reqCals}</span> <span className="text-xs text-gray-500">kcal</span></div><div><span className="text-xl font-bold text-blue-400">{reqProt}g</span> <span className="text-xs text-gray-500">prot</span></div></div></div>
+        {!suggestion ? <button onClick={handleGetSuggestion} disabled={loading} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2">{loading ? <Loader2 className="animate-spin"/> : <><Sparkles size={18}/> GENERATE RECIPE</>}</button> : <div className="space-y-4 animate-in slide-in-from-bottom-4"><div className="bg-gray-700/50 p-4 rounded-xl border border-gray-600"><h4 className="text-lg font-bold text-white mb-1">{suggestion.mealName}</h4><p className="text-xs text-blue-200 italic mb-3">{suggestion.reason}</p><ul className="text-sm text-gray-300 list-disc pl-4 space-y-1 mb-3">{suggestion.ingredients.map((ing, i) => <li key={i}>{ing}</li>)}</ul><div className="flex gap-3 text-xs font-mono border-t border-gray-600 pt-2"><span className="text-white">{suggestion.macros.cal} kcal</span><span className="text-red-300">{suggestion.macros.p}p</span><span className="text-orange-300">{suggestion.macros.c}c</span><span className="text-yellow-300">{suggestion.macros.f}f</span></div></div><button onClick={handleGetSuggestion} className="w-full bg-gray-700 text-gray-300 py-3 rounded-xl font-bold text-xs">TRY ANOTHER</button></div>}
       </div>
     </div>
   );
@@ -395,162 +242,57 @@ const TargetEditorModal = ({ isOpen, onClose, activePhase, setActivePhase, targe
   const [ghostExplanation, setGhostExplanation] = useState("");
   const [proteinRange, setProteinRange] = useState("");
 
-  useEffect(() => {
-    setLocalTargets(targets[editingPhase] || INITIAL_TARGETS[editingPhase]);
-    setGhostExplanation(""); 
-    setProteinRange("");
-  }, [editingPhase, targets]);
-  
-  useEffect(() => {
-    if (isOpen) setEditingPhase(activePhase);
-  }, [isOpen, activePhase]);
+  useEffect(() => { setLocalTargets(targets[editingPhase] || INITIAL_TARGETS[editingPhase]); setGhostExplanation(""); setProteinRange(""); }, [editingPhase, targets]);
+  useEffect(() => { if (isOpen) setEditingPhase(activePhase); }, [isOpen, activePhase]);
 
   if (!isOpen) return null;
 
   const handleAutoCalculate = async () => {
     setLoading(true);
     try {
-      const prompt = `I am a bodybuilder currently ${editingPhase}ing. My weight is ${currentWeight}kg. 
-      Recommend a Calorie target and a Protein range (Min-Max).
-      
-      Rules:
-      1. Cut: TEE - 500kcal. Protein: 1.8-2.7g/kg (Muscle sparing).
-      2. Bulk: TEE + 300kcal. Protein: 1.6-2.2g/kg (Sufficient).
-      3. Maintain: TEE. Protein: 1.8-2.2g/kg.
-      
-      Ignore carbs and fats. Only focus on Calories and Protein.
-
-      Return JSON only: {"cal": number, "p_min": number, "p_max": number, "explanation": string}`;
-      
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-      });
+      const prompt = `I am a bodybuilder currently ${editingPhase}ing. My weight is ${currentWeight}kg. Recommend Calorie target and Protein range (Min-Max). Rules: 1. Cut: TEE - 500kcal. Protein: 1.8-2.7g/kg. 2. Bulk: TEE + 300kcal. Protein: 1.6-2.2g/kg. 3. Maintain: TEE. Protein: 1.8-2.2g/kg. Ignore carbs/fats. Return JSON only: {"cal": number, "p_min": number, "p_max": number, "explanation": string}`;
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
       const data = await response.json();
-      if (data.error) throw new Error(data.error.message);
       const result = parseAIResponse(data.candidates[0].content.parts[0].text);
-      
       setLocalTargets({ ...localTargets, cal: result.cal, p: result.p_max }); 
-      setGhostExplanation(result.explanation);
-      setProteinRange(`${result.p_min} - ${result.p_max}g`);
-      setToast("Ghost calculated new targets");
-    } catch (e) {
-      setToast("AI Error: " + e.message);
-    }
+      setGhostExplanation(result.explanation); setProteinRange(`${result.p_min} - ${result.p_max}g`); setToast("Ghost calculated new targets");
+    } catch (e) { setToast("AI Error"); }
     setLoading(false);
   };
 
-  const handleSave = () => {
-    setTargets(prev => ({ ...prev, [editingPhase]: localTargets }));
-    setToast(`${editingPhase} Targets Saved`);
-    onClose(); 
-  };
-
-  const handleCalChange = (e) => {
-    const val = e.target.value;
-    setLocalTargets({ ...localTargets, cal: val === '' ? '' : parseInt(val) });
-  };
-
-  const handleProtChange = (e) => {
-    const val = e.target.value;
-    setLocalTargets({ ...localTargets, p: val === '' ? '' : parseInt(val) });
-  };
-  
-  const handleCarbChange = (e) => {
-    const val = e.target.value;
-    setLocalTargets({ ...localTargets, c: val === '' ? '' : parseInt(val) });
-  };
-
-  const handleFatChange = (e) => {
-    const val = e.target.value;
-    setLocalTargets({ ...localTargets, f: val === '' ? '' : parseInt(val) });
-  };
+  const handleSave = () => { setTargets(prev => ({ ...prev, [editingPhase]: localTargets })); setToast(`${editingPhase} Targets Saved`); onClose(); };
 
   return (
     <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 animate-in fade-in">
       <div className="bg-gray-800 w-full max-w-xs rounded-2xl p-6 border border-gray-700 shadow-2xl">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-black italic text-white uppercase">TARGETS</h3>
-          <button onClick={onClose}><X size={24} className="text-gray-500"/></button>
-        </div>
-
-        {/* Phase Switcher */}
-        <div className="flex bg-gray-900 p-1 rounded-lg mb-6">
-           {['CUT', 'MAINTAIN', 'BULK'].map(p => (
-             <button 
-              key={p} 
-              onClick={() => setEditingPhase(p)} 
-              className={`flex-1 py-2 text-[10px] font-bold rounded-md transition-all ${editingPhase === p ? 'bg-gray-700 text-white' : 'text-gray-500'}`}
-            >
-               {p}
-             </button>
-           ))}
-        </div>
-
-        {/* Active Status */}
-        <div className="mb-6 flex items-center justify-between bg-gray-900/50 p-3 rounded-lg border border-gray-700">
-           <span className="text-xs text-gray-400">Current Mode: <span className={activePhase === 'CUT' ? 'text-red-400 font-bold' : activePhase === 'BULK' ? 'text-green-400 font-bold' : 'text-blue-400 font-bold'}>{activePhase}</span></span>
-           {activePhase !== editingPhase && (
-             <button onClick={() => setActivePhase(editingPhase)} className="text-[10px] bg-blue-600/20 text-blue-400 px-2 py-1 rounded border border-blue-500/30 font-bold">SET AS ACTIVE</button>
-           )}
-        </div>
-
-        {/* GHOST EXPLANATION */}
-        {ghostExplanation && (
-          <div className="mb-4 p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg">
-             <div className="flex items-center gap-2 text-blue-300 text-xs font-bold mb-1"><Ghost size={12}/> GHOST REASONING</div>
-             <p className="text-xs text-gray-300">{ghostExplanation}</p>
-             <p className="text-xs text-blue-200 mt-1 font-mono">Suggested Protein Range: {proteinRange}</p>
-          </div>
-        )}
-
+        <div className="flex justify-between items-center mb-4"><h3 className="text-xl font-black italic text-white uppercase">TARGETS</h3><button onClick={onClose}><X size={24} className="text-gray-500"/></button></div>
+        <div className="flex bg-gray-900 p-1 rounded-lg mb-6">{['CUT', 'MAINTAIN', 'BULK'].map(p => (<button key={p} onClick={() => setEditingPhase(p)} className={`flex-1 py-2 text-[10px] font-bold rounded-md transition-all ${editingPhase === p ? 'bg-gray-700 text-white' : 'text-gray-500'}`}>{p}</button>))}</div>
+        <div className="mb-6 flex items-center justify-between bg-gray-900/50 p-3 rounded-lg border border-gray-700"><span className="text-xs text-gray-400">Current Mode: <span className={activePhase==='CUT'?'text-red-400 font-bold':activePhase==='BULK'?'text-green-400 font-bold':'text-blue-400 font-bold'}>{activePhase}</span></span>{activePhase !== editingPhase && (<button onClick={() => setActivePhase(editingPhase)} className="text-[10px] bg-blue-600/20 text-blue-400 px-2 py-1 rounded border border-blue-500/30 font-bold">SET AS ACTIVE</button>)}</div>
+        {ghostExplanation && (<div className="mb-4 p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg"><div className="flex items-center gap-2 text-blue-300 text-xs font-bold mb-1"><Ghost size={12}/> GHOST REASONING</div><p className="text-xs text-gray-300">{ghostExplanation}</p><p className="text-xs text-blue-200 mt-1 font-mono">Suggested Protein Range: {proteinRange}</p></div>)}
         <div className="space-y-4">
-          <div>
-            <label className="text-xs text-blue-400 font-bold uppercase">Calories (Target)</label>
-            <input type="number" value={localTargets.cal || ''} onChange={handleCalChange} className="w-full bg-gray-900 p-3 rounded-lg text-white font-bold text-center border border-gray-600"/>
-          </div>
-          <div>
-             <label className="text-xs text-red-400 font-bold uppercase text-center block">Protein (Target)</label>
-             <input type="number" value={localTargets.p || ''} onChange={handleProtChange} className="w-full bg-gray-900 p-3 rounded-lg text-white font-bold text-center border border-gray-600"/>
-          </div>
-          
-          {/* Optional Carbs/Fats */}
+          <div><label className="text-xs text-blue-400 font-bold uppercase">Calories (Target)</label><input type="number" value={localTargets.cal||''} onChange={e=>setLocalTargets({...localTargets, cal:parseInt(e.target.value)||''})} className="w-full bg-gray-900 p-3 rounded-lg text-white font-bold text-center border border-gray-600"/></div>
+          <div><label className="text-xs text-red-400 font-bold uppercase text-center block">Protein (Target)</label><input type="number" value={localTargets.p||''} onChange={e=>setLocalTargets({...localTargets, p:parseInt(e.target.value)||''})} className="w-full bg-gray-900 p-3 rounded-lg text-white font-bold text-center border border-gray-600"/></div>
           <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-700">
-            <div>
-               <label className="text-[10px] text-gray-500 font-bold uppercase text-center block">Carbs (Optional)</label>
-               <input type="number" value={localTargets.c || ''} onChange={handleCarbChange} placeholder="-" className="w-full bg-gray-900 p-2 rounded-lg text-gray-400 text-center border border-gray-700 text-xs"/>
-            </div>
-            <div>
-               <label className="text-[10px] text-gray-500 font-bold uppercase text-center block">Fats (Optional)</label>
-               <input type="number" value={localTargets.f || ''} onChange={handleFatChange} placeholder="-" className="w-full bg-gray-900 p-2 rounded-lg text-gray-400 text-center border border-gray-700 text-xs"/>
-            </div>
+            <div><label className="text-[10px] text-gray-500 font-bold uppercase text-center block">Carbs (Optional)</label><input type="number" value={localTargets.c||''} onChange={e=>setLocalTargets({...localTargets, c:parseInt(e.target.value)||''})} placeholder="-" className="w-full bg-gray-900 p-2 rounded-lg text-gray-400 text-center border border-gray-700 text-xs"/></div>
+            <div><label className="text-[10px] text-gray-500 font-bold uppercase text-center block">Fats (Optional)</label><input type="number" value={localTargets.f||''} onChange={e=>setLocalTargets({...localTargets, f:parseInt(e.target.value)||''})} placeholder="-" className="w-full bg-gray-900 p-2 rounded-lg text-gray-400 text-center border border-gray-700 text-xs"/></div>
           </div>
         </div>
-
-        <button 
-          onClick={handleAutoCalculate}
-          disabled={loading}
-          className="w-full mt-6 bg-gray-700 hover:bg-gray-600 text-blue-300 text-xs font-bold py-3 rounded-xl flex items-center justify-center gap-2"
-        >
-          {loading ? <Loader2 size={14} className="animate-spin"/> : <><Wand2 size={14}/> ASK GHOST TO CALCULATE</>}
-        </button>
-
-        <button 
-          onClick={handleSave}
-          className="w-full mt-2 bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-xl"
-        >
-          SAVE {editingPhase} TARGETS
-        </button>
+        <button onClick={handleAutoCalculate} disabled={loading} className="w-full mt-6 bg-gray-700 hover:bg-gray-600 text-blue-300 text-xs font-bold py-3 rounded-xl flex items-center justify-center gap-2">{loading ? <Loader2 size={14} className="animate-spin"/> : <><Wand2 size={14}/> ASK GHOST TO CALCULATE</>}</button>
+        <button onClick={handleSave} className="w-full mt-2 bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-xl">SAVE {editingPhase} TARGETS</button>
       </div>
     </div>
   );
 };
 
 const GhostAiPanel = ({ show, onClose }) => (
-  <div className={`fixed inset-y-0 right-0 w-80 bg-gray-900 border-l border-gray-800 shadow-2xl z-50 transform transition-transform duration-300 ${show ? 'translate-x-0' : 'translate-x-full'}`}>
-    <div className="p-4 h-full flex flex-col">
-      <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-black italic text-blue-400 flex items-center gap-2"><Ghost size={24}/> GHOST AI</h2><button onClick={onClose}><X size={24} className="text-gray-500"/></button></div>
-      <div className="flex-1 bg-gray-800 p-3 rounded-lg border border-gray-700"><p className="text-sm text-gray-300"><span className="text-blue-300 font-bold">Status:</span> Ghost is monitoring your inputs.</p></div>
+  <div className={`fixed inset-y-0 right-0 w-80 bg-gray-900 border-l border-gray-800 shadow-2xl z-[100] transform transition-transform duration-300 ${show ? 'translate-x-0' : 'translate-x-full'}`}>
+     {show && <div className="absolute inset-0 -left-[100vw] bg-black/50" onClick={onClose}></div>}
+     <div className="p-4 h-full flex flex-col relative z-10 bg-gray-900">
+      <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-black italic text-blue-400 flex items-center gap-2"><Ghost size={24}/> GHOST AI</h2><button onClick={onClose}><X size={32} className="text-gray-500 hover:text-white"/></button></div>
+      <div className="flex-1 overflow-y-auto space-y-4">
+        <div className="bg-gray-800 p-3 rounded-lg border border-gray-700"><h4 className="text-white font-bold text-sm mb-2">How to use GhostLog</h4><ul className="text-xs text-gray-400 space-y-2 list-disc pl-4"><li><strong>Targets:</strong> Click the "CUT/BULK" button in the header to set your calorie goals. Use the "Wand" to auto-calculate.</li><li><strong>Ghost Chef:</strong> In the EAT tab, ask Ghost to invent a meal based on your remaining macros.</li><li><strong>Cardio:</strong> Use the "Cardio +" button in the TRAIN tab to log runs, rides, etc.</li><li><strong>Ghost Report:</strong> In the STATS tab, click "Analyze" to get a weekly critique of your progress.</li></ul></div>
+        <div className="bg-gray-800 p-3 rounded-lg border border-gray-700"><p className="text-sm text-gray-300"><span className="text-blue-300 font-bold">Status:</span> Ghost is watching.</p></div>
+      </div>
     </div>
   </div>
 );
@@ -558,37 +300,12 @@ const GhostAiPanel = ({ show, onClose }) => (
 const ExerciseSearchInput = ({ onAdd }) => {
   const [exerciseSearch, setExerciseSearch] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
-
-  const filteredExercises = useMemo(() => {
-    if (!exerciseSearch) return [];
-    return EXERCISE_DATABASE.filter(ex => ex.toLowerCase().includes(exerciseSearch.toLowerCase()));
-  }, [exerciseSearch]);
-
+  const filteredExercises = useMemo(() => !exerciseSearch ? [] : EXERCISE_DATABASE.filter(ex => ex.toLowerCase().includes(exerciseSearch.toLowerCase())), [exerciseSearch]);
   return (
     <div className="mt-6 bg-gray-900 border border-dashed border-gray-700 rounded-xl p-4 relative">
       <p className="text-xs text-gray-500 font-bold uppercase mb-2">Add Exercise</p>
-      <div className="flex gap-2">
-        <input 
-          type="text" 
-          placeholder="Search Exercise..." 
-          className="flex-1 bg-gray-800 text-white p-3 rounded-lg text-sm border border-gray-600 focus:border-blue-500 outline-none" 
-          value={exerciseSearch} 
-          onChange={e => { setExerciseSearch(e.target.value); setShowSuggestions(true); }} 
-          onFocus={() => setShowSuggestions(true)} 
-          onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} 
-          onKeyDown={e => { if(e.key==='Enter'){ onAdd(e.target.value); setExerciseSearch(''); } }} 
-        />
-        <button className="bg-gray-800 p-3 rounded-lg text-gray-400 border border-gray-600"><BookOpen size={20}/></button>
-      </div>
-      {showSuggestions && (exerciseSearch || filteredExercises.length > 0) && (
-        <div className="absolute left-0 right-0 mt-2 bg-gray-800 border border-gray-700 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto mx-4">
-          {filteredExercises.length > 0 ? filteredExercises.map((n, i) => (
-            <div key={i} className="p-3 hover:bg-blue-600/20 text-sm text-gray-300 border-b border-gray-700 last:border-0" onClick={() => { onAdd(n); setExerciseSearch(''); }}>{n}</div>
-          )) : (
-            <div className="p-3 text-sm text-gray-400 hover:bg-green-600/20" onClick={() => { onAdd(exerciseSearch); setExerciseSearch(''); }}>+ Create "{exerciseSearch}"</div>
-          )}
-        </div>
-      )}
+      <div className="flex gap-2"><input type="text" placeholder="Search Exercise..." className="flex-1 bg-gray-800 text-white p-3 rounded-lg text-sm border border-gray-600 focus:border-blue-500 outline-none" value={exerciseSearch} onChange={e => { setExerciseSearch(e.target.value); setShowSuggestions(true); }} onFocus={() => setShowSuggestions(true)} onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} onKeyDown={e => { if(e.key==='Enter'){ onAdd(e.target.value); setExerciseSearch(''); } }} /><button className="bg-gray-800 p-3 rounded-lg text-gray-400 border border-gray-600"><BookOpen size={20}/></button></div>
+      {showSuggestions && (exerciseSearch || filteredExercises.length > 0) && (<div className="absolute left-0 right-0 mt-2 bg-gray-800 border border-gray-700 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto mx-4">{filteredExercises.length > 0 ? filteredExercises.map((n, i) => <div key={i} className="p-3 hover:bg-blue-600/20 text-sm text-gray-300 border-b border-gray-700 last:border-0" onClick={() => { onAdd(n); setExerciseSearch(''); }}>{n}</div>) : <div className="p-3 text-sm text-gray-400 hover:bg-green-600/20" onClick={() => { onAdd(exerciseSearch); setExerciseSearch(''); }}>+ Create "{exerciseSearch}"</div>}</div>)}
     </div>
   );
 };
@@ -601,72 +318,12 @@ const AddMealModal = ({ isOpen, onClose, onSave, apiKey, setToast }) => {
   const [loading, setLoading] = useState(false);
   const [currentFood, setCurrentFood] = useState({ name: '', cal: '', p: '', c: '', f: '' });
   const fileInputRef = useRef(null);
-
   if (!isOpen) return null;
-
-  const handleSearch = async () => {
-    if (!searchQuery) return;
-    setLoading(true);
-    try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: `Identify food "${searchQuery}". Return JSON per 100g: {"name":string,"cal":number,"p":number,"c":number,"f":number} ONLY JSON` }] }] })
-      });
-      const data = await response.json();
-      if (data.error) throw new Error(data.error.message);
-      const result = parseAIResponse(data.candidates[0].content.parts[0].text);
-      setCurrentFood({ name: result.name, cal: result.cal, p: result.p, c: result.c, f: result.f });
-    } catch (e) { setToast("AI Error: " + e.message); }
-    setLoading(false);
-  };
-
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setLoading(true);
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        try {
-          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: `Identify food in image. Return JSON per 100g: {"name":string,"cal":number,"p":number,"c":number,"f":number} ONLY JSON` }, { inline_data: { mime_type: "image/jpeg", data: reader.result.split(',')[1] } }] }] })
-          });
-          const data = await response.json();
-          if (data.error) throw new Error(data.error.message);
-          const result = parseAIResponse(data.candidates[0].content.parts[0].text);
-          setSearchQuery(result.name);
-          setCurrentFood({ name: result.name, cal: result.cal, p: result.p, c: result.c, f: result.f });
-        } catch (e) { setToast("Scan Error: " + e.message); }
-        setLoading(false);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const addIngredient = () => {
-    const name = currentFood.name || searchQuery || "Food";
-    if (name && weight) {
-      const m = parseFloat(weight) / 100;
-      setIngredients([...ingredients, { id: Date.now(), name: `${name} (${weight}g)`, cal: Math.round((currentFood.cal||0)*m), p: Math.round((currentFood.p||0)*m), c: Math.round((currentFood.c||0)*m), f: Math.round((currentFood.f||0)*m), active: true }]);
-      setSearchQuery(''); setWeight(''); setCurrentFood({ name: '', cal: '', p: '', c: '', f: '' });
-    }
-  };
-
-  const removeIngredient = (index) => {
-    const newIngredients = [...ingredients];
-    newIngredients.splice(index, 1);
-    setIngredients(newIngredients);
-  };
-
-  const handleSave = () => {
-    if (mealName && ingredients.length > 0) {
-      onSave({ id: Date.now(), name: mealName, ingredients: ingredients });
-      setMealName('');
-      setIngredients([]);
-      onClose();
-    }
-  };
-
+  const handleSearch = async () => { if (!searchQuery) return; setLoading(true); try { const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: `Identify food "${searchQuery}". Return JSON per 100g: {"name":string,"cal":number,"p":number,"c":number,"f":number} ONLY JSON` }] }] }) }); const data = await response.json(); const result = parseAIResponse(data.candidates[0].content.parts[0].text); setCurrentFood({ name: result.name, cal: result.cal, p: result.p, c: result.c, f: result.f }); } catch (e) { setToast("AI Error: " + e.message); } setLoading(false); };
+  const handleImageUpload = (e) => { const file = e.target.files[0]; if (file) { setLoading(true); const reader = new FileReader(); reader.onloadend = async () => { try { const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: `Identify food in image. Return JSON per 100g: {"name":string,"cal":number,"p":number,"c":number,"f":number} ONLY JSON` }, { inline_data: { mime_type: "image/jpeg", data: reader.result.split(',')[1] } }] }] }) }); const data = await response.json(); const result = parseAIResponse(data.candidates[0].content.parts[0].text); setSearchQuery(result.name); setCurrentFood({ name: result.name, cal: result.cal, p: result.p, c: result.c, f: result.f }); } catch (e) { setToast("Scan Error: " + e.message); } setLoading(false); }; reader.readAsDataURL(file); } };
+  const addIngredient = () => { const name = currentFood.name || searchQuery || "Food"; if (name && weight) { const m = parseFloat(weight) / 100; setIngredients([...ingredients, { id: Date.now(), name: `${name} (${weight}g)`, cal: Math.round((currentFood.cal||0)*m), p: Math.round((currentFood.p||0)*m), c: Math.round((currentFood.c||0)*m), f: Math.round((currentFood.f||0)*m), active: true }]); setSearchQuery(''); setWeight(''); setCurrentFood({ name: '', cal: '', p: '', c: '', f: '' }); } };
+  const removeIngredient = (index) => { const newIngredients = [...ingredients]; newIngredients.splice(index, 1); setIngredients(newIngredients); };
+  const handleSave = () => { if (mealName && ingredients.length > 0) { onSave({ id: Date.now(), name: mealName, ingredients: ingredients }); setMealName(''); setIngredients([]); onClose(); } };
   return (
     <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4 animate-in fade-in">
       <div className="bg-gray-800 w-full max-w-md rounded-2xl p-6 border border-gray-700 shadow-2xl h-[80vh] flex flex-col">
@@ -676,10 +333,7 @@ const AddMealModal = ({ isOpen, onClose, onSave, apiKey, setToast }) => {
           <div className="space-y-2">{ingredients.map((ing, i) => (<div key={ing.id} className="bg-gray-900 p-2 rounded flex justify-between items-center text-sm border border-gray-700"><span className="text-white">{ing.name}</span><span className="text-gray-400 text-xs">{ing.cal}kcal</span><button onClick={() => removeIngredient(i)} className="text-red-400"><Trash2 size={16}/></button></div>))}</div>
           <div className="bg-gray-900/50 p-3 rounded-xl border border-dashed border-gray-700 relative">
             {loading && <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10"><Loader2 className="animate-spin text-blue-500"/></div>}
-            <div className="flex gap-2 mb-3">
-              <div className="relative flex-1"><input type="text" placeholder="Search Food" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} className="w-full bg-gray-800 p-2 rounded text-sm text-white outline-none border border-gray-600"/><button onClick={handleSearch} className="absolute right-2 top-2 text-gray-400"><Search size={16}/></button></div>
-              <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden"/><button onClick={() => fileInputRef.current.click()} className="bg-gray-800 p-2 rounded border border-gray-600 text-gray-400"><Camera size={20}/></button>
-            </div>
+            <div className="flex gap-2 mb-3"><div className="relative flex-1"><input type="text" placeholder="Search Food" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} className="w-full bg-gray-800 p-2 rounded text-sm text-white outline-none border border-gray-600"/><button onClick={handleSearch} className="absolute right-2 top-2 text-gray-400"><Search size={16}/></button></div><input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden"/><button onClick={() => fileInputRef.current.click()} className="bg-gray-800 p-2 rounded border border-gray-600 text-gray-400"><Camera size={20}/></button></div>
             <div className="grid grid-cols-4 gap-2 mb-3">{['cal','p','c','f'].map(k => <input key={k} type="number" placeholder={k.toUpperCase()} value={currentFood[k]} onChange={e => setCurrentFood({...currentFood, [k]: e.target.value})} className="bg-gray-800 p-2 rounded text-xs text-white border border-gray-600 text-center"/>)}</div>
             <div className="flex gap-2"><input type="number" placeholder="Weight (g)" value={weight} onChange={e => setWeight(e.target.value)} className="flex-1 bg-gray-800 p-2 rounded text-sm text-white border border-gray-600"/><button onClick={addIngredient} className="px-4 bg-blue-600 text-white rounded font-bold text-xs">ADD</button></div>
           </div>
@@ -692,12 +346,10 @@ const AddMealModal = ({ isOpen, onClose, onSave, apiKey, setToast }) => {
 
 const DailyCheckinModal = ({ isOpen, onClose, stats, setStats, onSave, date, setDate }) => {
   if (!isOpen) return null;
-
   const getStressLabel = (val) => ['Zen', 'Chill', 'Normal', 'Spicy', 'INTERNAL SCREAMING'][val - 1] || 'Normal';
   const getFatigueLabel = (val) => ['Fresh', 'Good', 'Meh', 'Heavy', 'WRECKED'][val - 1] || 'Meh';
   const getSleepLabel = (val) => ['Terrible', 'Poor', 'Okay', 'Good', 'Great'][val - 1] || 'Okay';
   const getActivityLabel = (val) => ['Sedentary', 'Light', 'Moderate', 'Very Active', 'Athlete'][val - 1] || 'Moderate';
-
   return (
     <div className="fixed inset-0 bg-black/90 z-50 flex items-end sm:items-center justify-center p-4 animate-in slide-in-from-bottom-10">
       <div className="bg-gray-800 w-full max-w-sm rounded-2xl p-6 border border-gray-700 shadow-2xl relative max-h-[90vh] overflow-y-auto">
@@ -706,30 +358,10 @@ const DailyCheckinModal = ({ isOpen, onClose, stats, setStats, onSave, date, set
            <div className="bg-gray-900 p-3 rounded border border-gray-700 flex justify-between items-center"><span className="text-gray-300 text-sm font-bold flex gap-2"><Calendar size={16}/> Date</span><input type="date" value={date} onChange={e => setDate(e.target.value)} className="bg-gray-800 text-white text-sm outline-none"/></div>
            <div className="flex justify-between items-center"><div className="flex gap-2 text-gray-300 items-center"><Scale size={18}/> Weight</div><div className="flex gap-2 items-center"><input type="number" value={stats.weight} onChange={e => setStats({...stats, weight: e.target.value})} className="bg-gray-900 w-20 p-2 rounded text-center text-white font-bold border border-gray-700"/><span className="text-sm text-gray-500">kg</span></div></div>
            <div className="flex justify-between items-center"><div className="flex gap-2 text-gray-300 items-center"><Footprints size={18}/> Steps</div><input type="number" value={stats.steps} onChange={e => setStats({...stats, steps: e.target.value})} className="bg-gray-900 w-24 p-2 rounded text-center text-white font-bold border border-gray-700"/></div>
-           
-           {/* Activity Level */}
-           <div>
-             <div className="flex justify-between text-xs text-gray-300 mb-2"><span className="capitalize flex gap-2 items-center"><Zap size={14}/> Activity Level</span><span className="font-bold text-blue-400">{getActivityLabel(stats.activity)}</span></div>
-             <input type="range" min="1" max="5" value={stats.activity} onChange={e => setStats({...stats, activity: parseInt(e.target.value)})} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"/>
-           </div>
-
-           <div className="flex justify-between items-center">
-            <div className="flex items-center gap-2 text-gray-300"><Moon size={18}/> Sleep Duration</div>
-            <div className="flex items-center gap-2"><input type="number" step="0.5" value={stats.sleepHours} onChange={(e) => setStats({...stats, sleepHours: e.target.value})} className="bg-gray-900 w-24 p-2 rounded text-center font-bold text-white border border-gray-700"/><span className="text-sm text-gray-500">hrs</span></div>
-           </div>
-
-           {/* Sliders */}
-           {['sleepQuality', 'stress', 'fatigue'].map(k => (
-             <div key={k}>
-               <div className="flex justify-between text-xs text-gray-300 mb-2">
-                 <span className="capitalize flex gap-2 items-center"><Activity size={14}/> {k.replace(/([A-Z])/g, ' $1')}</span>
-                 <span className={`font-bold ${stats[k] > (k==='sleepQuality'?2:3) ? (k==='sleepQuality'?'text-green-400':'text-red-400') : (k==='sleepQuality'?'text-red-400':'text-green-400')}`}>
-                   {stats[k]}/5 - {k==='sleepQuality' ? getSleepLabel(stats[k]) : k==='stress' ? getStressLabel(stats[k]) : getFatigueLabel(stats[k])}
-                 </span>
-               </div>
-               <input type="range" min="1" max="5" value={stats[k]} onChange={e => setStats({...stats, [k]: parseInt(e.target.value)})} className={`w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-${k==='sleepQuality'?'green':'red'}-500`}/>
-             </div>
-           ))}
+           <div className="flex justify-between items-center"><div className="flex gap-2 text-gray-300 items-center"><Droplets size={18}/> Water</div><div className="flex gap-2 items-center"><input type="number" value={stats.water} onChange={e => setStats({...stats, water: e.target.value})} className="bg-gray-900 w-20 p-2 rounded text-center text-white font-bold border border-gray-700"/><span className="text-sm text-gray-500">L</span></div></div>
+           <div><div className="flex justify-between text-xs text-gray-300 mb-2"><span className="capitalize flex gap-2 items-center"><Zap size={14}/> Activity Level</span><span className="font-bold text-blue-400">{getActivityLabel(stats.activity)}</span></div><input type="range" min="1" max="5" value={stats.activity} onChange={e => setStats({...stats, activity: parseInt(e.target.value)})} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"/></div>
+           <div className="flex justify-between items-center"><div className="flex items-center gap-2 text-gray-300"><Moon size={18}/> Sleep Duration</div><div className="flex items-center gap-2"><input type="number" step="0.5" value={stats.sleepHours} onChange={(e) => setStats({...stats, sleepHours: e.target.value})} className="bg-gray-900 w-24 p-2 rounded text-center font-bold text-white border border-gray-700"/><span className="text-sm text-gray-500">hrs</span></div></div>
+           {['sleepQuality', 'stress', 'fatigue'].map(k => (<div key={k}><div className="flex justify-between text-xs text-gray-300 mb-2"><span className="capitalize flex gap-2 items-center"><Activity size={14}/> {k.replace(/([A-Z])/g, ' $1')}</span><span className={`font-bold ${stats[k] > (k==='sleepQuality'?2:3) ? (k==='sleepQuality'?'text-green-400':'text-red-400') : (k==='sleepQuality'?'text-red-400':'text-green-400')}`}>{stats[k]}/5 - {k==='sleepQuality' ? getSleepLabel(stats[k]) : k==='stress' ? getStressLabel(stats[k]) : getFatigueLabel(stats[k])}</span></div><input type="range" min="1" max="5" value={stats[k]} onChange={e => setStats({...stats, [k]: parseInt(e.target.value)})} className={`w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-${k==='sleepQuality'?'green':'red'}-500`}/></div>))}
            <button onClick={onSave} className="w-full bg-green-600 text-white font-bold py-3 rounded-xl mt-2 flex justify-center gap-2"><Save size={20}/> SUBMIT</button>
         </div>
       </div>
@@ -752,7 +384,6 @@ const TrainTab = ({
 
   const getLastSets = (name) => {
     for (let i = workoutHistory.length - 1; i >= 0; i--) {
-      // Handle cardio logs which have different structure
       if (workoutHistory[i].exercises) {
         const ex = workoutHistory[i].exercises.find(e => e.name.toLowerCase() === name.toLowerCase());
         if (ex && ex.sets?.length) return ex.sets;
@@ -794,134 +425,43 @@ const TrainTab = ({
   };
 
   const finishWorkout = () => {
-    if (!activeSession.exercises.length) { 
-      setMode('SPLIT_SELECT'); 
-      setActiveSession(null);
-      return; 
-    }
-    const log = { 
-      date: getLocalDate(), 
-      name: activeSession.name, 
-      exercises: activeSession.exercises.map(ex => ({ 
-        name: ex.name, 
-        sets: ex.sets.filter(s => s.weight && s.reps).map(s => ({ weight: s.weight, reps: s.reps })) 
-      })) 
-    };
+    if (!activeSession.exercises.length) { setMode('SPLIT_SELECT'); setActiveSession(null); return; }
+    const log = { date: getLocalDate(), name: activeSession.name, exercises: activeSession.exercises.map(ex => ({ name: ex.name, sets: ex.sets.filter(s => s.weight && s.reps).map(s => ({ weight: s.weight, reps: s.reps })) })) };
     setWorkoutHistory([...workoutHistory, log]);
     if (activeSession.splitId) {
        const updatedSplits = workoutSplits.map(split => {
          if (split.id === activeSession.splitId) {
-           const newExercises = activeSession.exercises.map(ex => ({
-             id: Date.now() + Math.random(), 
-             name: ex.name,
-             defaultSets: ex.sets.length 
-           }));
+           const newExercises = activeSession.exercises.map(ex => ({ id: Date.now() + Math.random(), name: ex.name, defaultSets: ex.sets.length }));
            return { ...split, exercises: newExercises };
          }
          return split;
        });
        setWorkoutSplits(updatedSplits);
     }
-    setActiveSession(null); 
-    setMode('SPLIT_SELECT');
+    setActiveSession(null); setMode('SPLIT_SELECT');
   };
 
-  const cancelSession = () => {
-    requestConfirm("Quit workout? Progress will be lost.", () => {
-      setActiveSession(null);
-      setMode('SPLIT_SELECT');
-    });
-  };
+  const cancelSession = () => { requestConfirm("Quit workout? Progress will be lost.", () => { setActiveSession(null); setMode('SPLIT_SELECT'); }); };
+  const removeExerciseFromSession = (exIndex) => { requestConfirm("Remove exercise?", () => { const newExs = [...activeSession.exercises]; newExs.splice(exIndex, 1); setActiveSession({ ...activeSession, exercises: newExs }); }); };
+  const updateSet = (exIdx, setIdx, field, value) => { const n = [...activeSession.exercises]; n[exIdx].sets[setIdx][field] = value; setActiveSession({...activeSession, exercises: n}); };
+  const toggleSetComplete = (exIdx, setIdx) => { const n = [...activeSession.exercises]; n[exIdx].sets[setIdx].done = !n[exIdx].sets[setIdx].done; setActiveSession({...activeSession, exercises: n}); };
+  const addSet = (exIdx) => { const n = [...activeSession.exercises]; n[exIdx].sets.push({weight:'',reps:'',done:false,target:{}}); setActiveSession({...activeSession, exercises: n}); };
+  const removeSet = (exIdx, setIdx) => { const n = [...activeSession.exercises]; n[exIdx].sets.splice(setIdx, 1); setActiveSession({...activeSession, exercises: n}); };
 
-  const removeExerciseFromSession = (exIndex) => {
-    requestConfirm("Remove exercise?", () => {
-      const newExs = [...activeSession.exercises];
-      newExs.splice(exIndex, 1);
-      setActiveSession({ ...activeSession, exercises: newExs });
-    });
-  };
-
-  const updateSet = (exIdx, setIdx, field, value) => {
-    const n = [...activeSession.exercises];
-    n[exIdx].sets[setIdx][field] = value;
-    setActiveSession({...activeSession, exercises: n});
-  };
-
-  const toggleSetComplete = (exIdx, setIdx) => {
-    const n = [...activeSession.exercises];
-    n[exIdx].sets[setIdx].done = !n[exIdx].sets[setIdx].done;
-    setActiveSession({...activeSession, exercises: n});
-  };
-
-  const addSet = (exIdx) => {
-    const n = [...activeSession.exercises];
-    n[exIdx].sets.push({weight:'',reps:'',done:false,target:{}});
-    setActiveSession({...activeSession, exercises: n});
-  };
-
-  const removeSet = (exIdx, setIdx) => {
-    const n = [...activeSession.exercises];
-    n[exIdx].sets.splice(setIdx, 1);
-    setActiveSession({...activeSession, exercises: n});
-  };
-
-  // Template Logic
   const openTemplateEditor = (split) => { setEditingSplit(JSON.parse(JSON.stringify(split))); setMode('EDIT_TEMPLATE'); };
-  const saveTemplate = () => {
-    setWorkoutSplits(workoutSplits.map(s => s.id === editingSplit.id ? editingSplit : s));
-    setEditingSplit(null); setMode('SPLIT_SELECT');
-  };
-  const addExerciseToTemplate = (name) => {
-    if(!name) return;
-    setEditingSplit(prev => ({ ...prev, exercises: [...prev.exercises, { id: Date.now(), name, defaultSets: 3 }] }));
-  };
-  const handleSortTemplateExercises = () => {
-    let exs = [...editingSplit.exercises];
-    const dragged = exs.splice(dragItem.current, 1)[0];
-    exs.splice(dragOverItem.current, 0, dragged);
-    dragItem.current = null; dragOverItem.current = null;
-    setEditingSplit({ ...editingSplit, exercises: exs });
-  };
-  const deleteExerciseFromTemplate = (idx) => {
-    requestConfirm("Delete exercise from template?", () => {
-      const newExs = [...editingSplit.exercises];
-      newExs.splice(idx, 1);
-      setEditingSplit({...editingSplit, exercises: newExs});
-    });
-  };
+  const saveTemplate = () => { setWorkoutSplits(workoutSplits.map(s => s.id === editingSplit.id ? editingSplit : s)); setEditingSplit(null); setMode('SPLIT_SELECT'); };
+  const addExerciseToTemplate = (name) => { if(!name) return; setEditingSplit(prev => ({ ...prev, exercises: [...prev.exercises, { id: Date.now(), name, defaultSets: 3 }] })); };
+  const handleSortTemplateExercises = () => { let exs = [...editingSplit.exercises]; const dragged = exs.splice(dragItem.current, 1)[0]; exs.splice(dragOverItem.current, 0, dragged); dragItem.current = null; dragOverItem.current = null; setEditingSplit({ ...editingSplit, exercises: exs }); };
+  const deleteExerciseFromTemplate = (idx) => { requestConfirm("Delete exercise from template?", () => { const newExs = [...editingSplit.exercises]; newExs.splice(idx, 1); setEditingSplit({...editingSplit, exercises: newExs}); }); };
 
   if (mode === 'SPLIT_SELECT') {
     return (
       <div className="pb-24 p-4 space-y-4 animate-in fade-in">
-         <div className="flex justify-between items-end">
-            <h2 className="text-gray-400 font-bold text-sm tracking-widest uppercase">Workouts</h2>
-            <button onClick={() => setWorkoutEditMode(!workoutEditMode)} className={`text-xs font-bold ${workoutEditMode ? 'text-green-400' : 'text-gray-500'}`}>{workoutEditMode ? 'DONE' : 'EDIT SPLITS'}</button>
-         </div>
-         
-         {/* NEW: Start Empty Workout */}
+         <div className="flex justify-between items-end"><h2 className="text-gray-400 font-bold text-sm tracking-widest uppercase">Workouts</h2><button onClick={() => setWorkoutEditMode(!workoutEditMode)} className={`text-xs font-bold ${workoutEditMode ? 'text-green-400' : 'text-gray-500'}`}>{workoutEditMode ? 'DONE' : 'EDIT SPLITS'}</button></div>
          <button onClick={() => startSession(null)} className="w-full bg-blue-600/20 border border-blue-500/50 p-4 rounded-xl flex items-center justify-center gap-2 text-blue-400 font-bold hover:bg-blue-600/30 transition-all"><Plus size={20}/> Start Empty Workout</button>
-         
-         {/* NEW: Cardio Button */}
          <button onClick={() => setShowCardioModal(true)} className="w-full bg-gray-800 border border-gray-700 p-4 rounded-xl flex items-center justify-center gap-2 text-gray-300 font-bold hover:bg-gray-700 transition-all"><HeartPulse size={20} className="text-red-400"/> Cardio +</button>
-         
-         <div className="grid grid-cols-1 gap-3">
-           {workoutSplits.map((split, i) => (
-             <div key={split.id} className="flex gap-2" onDragEnter={() => dragOverItem.current = i}>
-               {workoutEditMode && <div draggable onDragStart={() => dragItem.current = i} onDragEnd={handleSortSplits} className="bg-gray-800 p-2 rounded-l-xl border-y border-l border-gray-700 flex items-center justify-center cursor-move"><GripVertical size={20} className="text-gray-500"/></div>}
-               <div className={`flex-1 flex items-center justify-between bg-gray-800 border border-gray-700 p-4 ${workoutEditMode ? 'rounded-r-xl' : 'rounded-xl'}`} onClick={() => !workoutEditMode && startSession(split)}>
-                  <span className="font-bold text-lg text-white">{split.name}</span>
-                  {!workoutEditMode ? <button onClick={(e) => { e.stopPropagation(); openTemplateEditor(split); }} className="bg-gray-700 p-2 rounded-lg text-gray-300 hover:text-blue-400"><Edit3 size={16}/></button> : null}
-               </div>
-               {workoutEditMode && (
-                 <div className="flex flex-col gap-1">
-                   <button onClick={(e) => { e.stopPropagation(); renameSplit(split.id, split.name) }} className="bg-gray-800 p-2 rounded-lg text-blue-400 border border-gray-700"><Edit3 size={14}/></button>
-                   <button onClick={(e) => { e.stopPropagation(); deleteSplit(split.id) }} className="bg-gray-800 p-2 rounded-lg text-red-400 border border-gray-700"><Trash2 size={14}/></button>
-                 </div>
-               )}
-             </div>
-           ))}
-           {workoutEditMode && <button onClick={addSplit} className="bg-gray-900 border-2 border-dashed border-gray-700 p-4 rounded-xl text-gray-500 font-bold hover:text-white">+ ADD NEW SPLIT</button>}
-         </div>
+         <div className="grid grid-cols-1 gap-3">{workoutSplits.map((split, i) => (<div key={split.id} className="flex gap-2" onDragEnter={() => dragOverItem.current = i}>{workoutEditMode && <div draggable onDragStart={() => dragItem.current = i} onDragEnd={handleSortSplits} className="bg-gray-800 p-2 rounded-l-xl border-y border-l border-gray-700 flex items-center justify-center cursor-move"><GripVertical size={20} className="text-gray-500"/></div>}<div className={`flex-1 flex items-center justify-between bg-gray-800 border border-gray-700 p-4 ${workoutEditMode ? 'rounded-r-xl' : 'rounded-xl'}`} onClick={() => !workoutEditMode && startSession(split)}><span className="font-bold text-lg text-white">{split.name}</span>{!workoutEditMode ? <button onClick={(e) => { e.stopPropagation(); openTemplateEditor(split); }} className="bg-gray-700 p-2 rounded-lg text-gray-300 hover:text-blue-400"><Edit3 size={16}/></button> : null}</div>{workoutEditMode && (<div className="flex flex-col gap-1"><button onClick={(e) => { e.stopPropagation(); renameSplit(split.id, split.name) }} className="bg-gray-800 p-2 rounded-lg text-blue-400 border border-gray-700"><Edit3 size={14}/></button><button onClick={(e) => { e.stopPropagation(); deleteSplit(split.id) }} className="bg-gray-800 p-2 rounded-lg text-red-400 border border-gray-700"><Trash2 size={14}/></button></div>)}</div>))}
+           {workoutEditMode && <button onClick={addSplit} className="bg-gray-900 border-2 border-dashed border-gray-700 p-4 rounded-xl text-gray-500 font-bold hover:text-white">+ ADD NEW SPLIT</button>}</div>
       </div>
     );
   }
@@ -929,54 +469,25 @@ const TrainTab = ({
   if (mode === 'EDIT_TEMPLATE') {
     return (
       <div className="pb-24 p-4 space-y-4 animate-in fade-in">
-        <div className="flex justify-between items-center border-b border-gray-800 pb-4">
-           <button onClick={() => setMode('SPLIT_SELECT')} className="text-xs text-gray-500 hover:text-white uppercase font-bold tracking-wider">&larr; Back</button>
-           <h2 className="text-white font-black italic text-xl">Editing: {editingSplit.name}</h2>
-           <button onClick={saveTemplate} className="text-xs text-green-400 font-bold uppercase tracking-wider">SAVE</button>
-        </div>
-        <div className="space-y-2">
-          {editingSplit.exercises.map((ex, i) => (
-            <div key={ex.id} className="bg-gray-800 rounded-xl p-4 border border-gray-700 flex items-center gap-3" onDragEnter={() => dragOverItem.current = i}>
-               <div draggable onDragStart={() => dragItem.current = i} onDragEnd={handleSortTemplateExercises} className="cursor-move"><GripVertical size={20} className="text-gray-500"/></div>
-               <div className="flex-1"><p className="text-white font-bold">{ex.name}</p></div>
-               <button onClick={(e) => {e.stopPropagation(); deleteExerciseFromTemplate(i);}} className="text-red-400"><Trash2 size={18}/></button>
-            </div>
-          ))}
-        </div>
+        <div className="flex justify-between items-center border-b border-gray-800 pb-4"><button onClick={() => setMode('SPLIT_SELECT')} className="text-xs text-gray-500 hover:text-white uppercase font-bold tracking-wider">&larr; Back</button><h2 className="text-white font-black italic text-xl">Editing: {editingSplit.name}</h2><button onClick={saveTemplate} className="text-xs text-green-400 font-bold uppercase tracking-wider">SAVE</button></div>
+        <div className="space-y-2">{editingSplit.exercises.map((ex, i) => (<div key={ex.id} className="bg-gray-800 rounded-xl p-4 border border-gray-700 flex items-center gap-3" onDragEnter={() => dragOverItem.current = i}><div draggable onDragStart={() => dragItem.current = i} onDragEnd={handleSortTemplateExercises} className="cursor-move"><GripVertical size={20} className="text-gray-500"/></div><div className="flex-1"><p className="text-white font-bold">{ex.name}</p></div><button onClick={(e) => {e.stopPropagation(); deleteExerciseFromTemplate(i);}} className="text-red-400"><Trash2 size={18}/></button></div>))}</div>
         <ExerciseSearchInput onAdd={addExerciseToTemplate} />
       </div>
     );
   }
 
-  // ACTIVE SESSION
   return (
     <div className="pb-24 p-4 space-y-4 animate-in fade-in">
       <div className={`p-3 rounded-lg border flex items-center gap-3 mb-4 ${readinessScore > 80 ? 'bg-green-900/30 border-green-500/50' : readinessScore < 40 ? 'bg-red-900/30 border-red-500/50' : 'bg-gray-800 border-gray-700'}`}>
          {readinessScore > 80 ? <Sparkles className="text-green-400" size={20}/> : readinessScore < 40 ? <AlertTriangle className="text-red-400" size={20}/> : <Activity className="text-gray-400" size={20}/>}
          <div><p className="text-xs font-bold text-white uppercase tracking-wide">{readinessScore > 80 ? "System Prime" : readinessScore < 40 ? "High Fatigue" : "Normal Readiness"}</p><p className="text-[10px] text-gray-400">{readinessScore > 80 ? "Targets increased." : readinessScore < 40 ? "Ghost lowered targets." : "Standard progression."}</p></div>
       </div>
-      <div className="flex justify-between items-center border-b border-gray-800 pb-4">
-         <button onClick={cancelSession} className="text-xs text-gray-500 hover:text-white uppercase font-bold tracking-wider">&larr; Cancel</button>
-         <h2 className="text-white font-black italic text-xl">{activeSession.name}</h2>
-         <button onClick={finishWorkout} className="text-xs text-green-400 font-bold uppercase tracking-wider">FINISH</button>
-      </div>
+      <div className="flex justify-between items-center border-b border-gray-800 pb-4"><button onClick={cancelSession} className="text-xs text-gray-500 hover:text-white uppercase font-bold tracking-wider">&larr; Cancel</button><h2 className="text-white font-black italic text-xl">{activeSession.name}</h2><button onClick={finishWorkout} className="text-xs text-green-400 font-bold uppercase tracking-wider">FINISH</button></div>
       {activeSession.exercises.map((ex, exIdx) => (
         <div key={ex.id} className="bg-gray-800 rounded-xl p-4 border border-gray-700 shadow-sm">
-          <div className="flex justify-between items-start mb-3">
-            <h3 className="text-lg font-bold text-white">{ex.name}</h3>
-            <button onClick={(e) => {e.stopPropagation(); removeExerciseFromSession(exIdx);}} className="text-gray-600 hover:text-red-400 p-1"><Trash2 size={18}/></button>
-          </div>
-          <div className="space-y-2">
-            <div className="flex text-[10px] text-gray-500 uppercase font-bold px-1"><span className="w-6 text-center">Set</span><span className="flex-1 text-center">Kg</span><span className="flex-1 text-center">Reps</span><span className="w-16 text-center">Done</span></div>
-            {ex.sets.map((set, setIdx) => (
-              <div key={setIdx} className={`flex items-center gap-2 ${set.done ? 'opacity-50' : ''}`}>
-                <span className="w-6 text-center text-gray-600 text-xs font-mono">{setIdx + 1}</span>
-                <div className="flex-1 relative"><input type="number" value={set.weight} placeholder={set.target?.weight ? `${set.target.weight}` : 'kg'} onChange={(e) => updateSet(exIdx, setIdx, 'weight', e.target.value)} className="w-full bg-gray-900 rounded-lg h-10 text-center text-white font-bold border border-gray-600 outline-none"/></div>
-                <div className="flex-1 relative"><input type="number" value={set.reps} placeholder={set.target?.reps ? `${set.target.reps}` : 'reps'} onChange={(e) => updateSet(exIdx, setIdx, 'reps', e.target.value)} className="w-full bg-gray-900 rounded-lg h-10 text-center text-white font-bold border border-gray-600 outline-none"/></div>
-                <button onClick={() => toggleSetComplete(exIdx, setIdx)} className={`w-8 h-10 rounded-lg flex items-center justify-center transition-colors ${set.done ? 'bg-green-500 text-black' : 'bg-gray-700 text-gray-400'}`}><Check size={16} /></button>
-                <button onClick={() => removeSet(exIdx, setIdx)} className="w-8 h-10 rounded-lg bg-gray-800 border border-gray-700 flex items-center justify-center text-gray-500 hover:text-red-400"><X size={14}/></button>
-              </div>
-            ))}
+          <div className="flex justify-between items-start mb-3"><h3 className="text-lg font-bold text-white">{ex.name}</h3><button onClick={(e) => {e.stopPropagation(); removeExerciseFromSession(exIdx);}} className="text-gray-600 hover:text-red-400 p-1"><Trash2 size={18}/></button></div>
+          <div className="space-y-2"><div className="flex text-[10px] text-gray-500 uppercase font-bold px-1"><span className="w-6 text-center">Set</span><span className="flex-1 text-center">Kg</span><span className="flex-1 text-center">Reps</span><span className="w-16 text-center">Done</span></div>
+            {ex.sets.map((set, setIdx) => (<div key={setIdx} className={`flex items-center gap-2 ${set.done ? 'opacity-50' : ''}`}><span className="w-6 text-center text-gray-600 text-xs font-mono">{setIdx + 1}</span><div className="flex-1 relative"><input type="number" value={set.weight} placeholder={set.target?.weight ? `${set.target.weight}` : 'kg'} onChange={(e) => updateSet(exIdx, setIdx, 'weight', e.target.value)} className="w-full bg-gray-900 rounded-lg h-10 text-center text-white font-bold border border-gray-600 outline-none"/></div><div className="flex-1 relative"><input type="number" value={set.reps} placeholder={set.target?.reps ? `${set.target.reps}` : 'reps'} onChange={(e) => updateSet(exIdx, setIdx, 'reps', e.target.value)} className="w-full bg-gray-900 rounded-lg h-10 text-center text-white font-bold border border-gray-600 outline-none"/></div><button onClick={() => toggleSetComplete(exIdx, setIdx)} className={`w-8 h-10 rounded-lg flex items-center justify-center transition-colors ${set.done ? 'bg-green-500 text-black' : 'bg-gray-700 text-gray-400'}`}><Check size={16} /></button><button onClick={() => removeSet(exIdx, setIdx)} className="w-8 h-10 rounded-lg bg-gray-800 border border-gray-700 flex items-center justify-center text-gray-500 hover:text-red-400"><X size={14}/></button></div>))}
             <button onClick={() => addSet(exIdx)} className="w-full py-2 text-xs text-gray-500 font-bold hover:text-blue-400 hover:bg-gray-700/50 rounded flex items-center justify-center gap-1"><Plus size={14}/> ADD SET</button>
           </div>
         </div>
@@ -992,48 +503,15 @@ const TrainTab = ({
 const EatTab = ({ savedMeals, dailyLog, mealEditMode, setMealEditMode, setShowAddMealModal, setShowGhostChefModal, logMeal, deleteSavedMeal, deleteLogItem, getMealMacros, dragItem, dragOverItem, handleSortMeals, requestConfirm, userTargets, dailyStats }) => {
   return (
     <div className="pb-24 p-4 space-y-6 animate-in fade-in">
-      <div className="flex justify-between items-end">
-         <h2 className="text-gray-400 font-bold text-sm tracking-widest uppercase flex items-center gap-2"><Flame size={14} /> Meal Bank</h2>
-         <div className="flex gap-2">
-           <button onClick={() => setShowGhostChefModal(true)} className="text-xs bg-blue-600/20 border border-blue-500/50 text-blue-400 font-bold px-3 py-1 rounded-lg flex items-center gap-1"><ChefHat size={14}/> GHOST CHEF</button>
-           <button onClick={() => setShowAddMealModal(true)} className="text-xs text-blue-400 font-bold flex items-center gap-1">+ NEW MEAL</button>
-         </div>
-      </div>
+      <div className="flex justify-between items-end"><h2 className="text-gray-400 font-bold text-sm tracking-widest uppercase flex items-center gap-2"><Flame size={14} /> Meal Bank</h2><div className="flex gap-2"><button onClick={() => setShowGhostChefModal(true)} className="text-xs bg-blue-600/20 border border-blue-500/50 text-blue-400 font-bold px-3 py-1 rounded-lg flex items-center gap-1"><ChefHat size={14}/> GHOST CHEF</button><button onClick={() => setShowAddMealModal(true)} className="text-xs text-blue-400 font-bold flex items-center gap-1">+ NEW MEAL</button></div></div>
       {savedMeals.length === 0 ? <p className="text-gray-600 text-center py-8">No meals saved yet. Add one!</p> : savedMeals.map((meal, i) => {
         const macros = getMealMacros(meal);
-        return (
-          <div 
-            key={meal.id} 
-            className={`bg-gray-800 rounded-xl p-4 border border-gray-700 shadow-sm group`} 
-            draggable={mealEditMode} 
-            onDragStart={() => dragItem.current = i} 
-            onDragEnter={() => dragOverItem.current = i} 
-            onDragEnd={handleSortMeals}
-          >
-            <div className="flex justify-between items-center mb-3">
-              <div className="flex items-center">
-                {mealEditMode && (<div className="mr-2 cursor-move text-gray-600 hover:text-white"><GripVertical size={20}/></div>)}
-                <div><h3 className="text-white font-bold text-lg">{meal.name}</h3><div className="flex gap-3 text-xs font-mono mt-1"><span className="text-blue-300">{macros.cal} kcal</span><span className="text-red-300">{macros.p}p</span><span className="text-orange-300">{macros.c}c</span><span className="text-yellow-300">{macros.f}f</span></div></div>
-              </div>
-              <div className="flex gap-2">
-                {mealEditMode ? <button onClick={(e) => {e.stopPropagation(); requestConfirm("Delete this meal?", () => deleteSavedMeal(meal.id))}} className="bg-red-500/20 text-red-400 p-2 rounded-full hover:bg-red-500"><Trash2 size={20} /></button> : <button onClick={(e) => {e.stopPropagation(); logMeal(meal)}} className="bg-gray-700 hover:bg-green-600 text-white p-2 rounded-full"><Plus size={20} /></button>}
-              </div>
-            </div>
-          </div>
-      );
+        return (<div key={meal.id} className={`bg-gray-800 rounded-xl p-4 border border-gray-700 shadow-sm group`} draggable={mealEditMode} onDragStart={() => dragItem.current = i} onDragEnter={() => dragOverItem.current = i} onDragEnd={handleSortMeals}><div className="flex justify-between items-center mb-3"><div className="flex items-center">{mealEditMode && (<div className="mr-2 cursor-move text-gray-600 hover:text-white"><GripVertical size={20}/></div>)}<div><h3 className="text-white font-bold text-lg">{meal.name}</h3><div className="flex gap-3 text-xs font-mono mt-1"><span className="text-blue-300">{macros.cal} kcal</span><span className="text-red-300">{macros.p}p</span><span className="text-orange-300">{macros.c}c</span><span className="text-yellow-300">{macros.f}f</span></div></div></div><div className="flex gap-2">{mealEditMode ? <button onClick={(e) => {e.stopPropagation(); requestConfirm("Delete this meal?", () => deleteSavedMeal(meal.id))}} className="bg-red-500/20 text-red-400 p-2 rounded-full hover:bg-red-500"><Trash2 size={20} /></button> : <button onClick={(e) => {e.stopPropagation(); logMeal(meal)}} className="bg-gray-700 hover:bg-green-600 text-white p-2 rounded-full"><Plus size={20} /></button>}</div></div></div>);
       })}
       <div className="flex justify-end"><button onClick={() => setMealEditMode(!mealEditMode)} className={`text-xs font-bold ${mealEditMode ? 'text-green-400' : 'text-gray-500'}`}>{mealEditMode ? 'DONE EDITING' : 'EDIT MEALS'}</button></div>
       <div>
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-gray-400 font-bold text-sm tracking-widest uppercase">Today's Log</h2>
-          <span className="text-xs text-gray-500 font-bold">Goal: {userTargets.cal} kcal</span>
-        </div>
-        {dailyLog.map((log, i) => (
-            <div key={i} className="flex justify-between items-center bg-gray-900 p-3 rounded-lg border border-gray-800 group mb-2">
-              <div><span className="text-white font-medium block">{log.name}</span><div className="flex gap-2 text-[10px] text-gray-500 font-mono"><span className="text-blue-400">{log.totalCals}cal</span><span>{log.totalP}p</span></div></div>
-              <button onClick={() => deleteLogItem(i)} className="text-gray-600 hover:text-red-400"><Trash2 size={16}/></button>
-            </div>
-        ))}
+        <div className="flex justify-between items-center mb-4"><h2 className="text-gray-400 font-bold text-sm tracking-widest uppercase">Today's Log</h2><span className="text-xs text-gray-500 font-bold">Goal: {userTargets.cal} kcal</span></div>
+        {dailyLog.map((log, i) => (<div key={i} className="flex justify-between items-center bg-gray-900 p-3 rounded-lg border border-gray-800 group mb-2"><div><span className="text-white font-medium block">{log.name}</span><div className="flex gap-2 text-[10px] text-gray-500 font-mono"><span className="text-blue-400">{log.totalCals}cal</span><span>{log.totalP}p</span></div></div><button onClick={() => deleteLogItem(i)} className="text-gray-600 hover:text-red-400"><Trash2 size={16}/></button></div>))}
       </div>
     </div>
   );
@@ -1053,6 +531,11 @@ const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workoutHistor
     return statsHistory.filter(d => new Date(d.date) >= cutoff);
   }, [statsHistory, timeRange]);
 
+  // NEW: Get Recent Workouts/Cardio
+  const recentActivity = useMemo(() => {
+    return [...workoutHistory].reverse().slice(0, 5); // Last 5 sessions
+  }, [workoutHistory]);
+
   const generateGhostReport = async () => {
     if (!apiKey) { setToast("API Key Missing"); return; }
     setLoadingReport(true);
@@ -1060,14 +543,14 @@ const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workoutHistor
       const prompt = `Analyze this bodybuilding data for someone currently ${phase}ing with a target of ${userTargets.cal} calories. 
       DATA: ${JSON.stringify({
         logs: statsHistory.slice(-7), 
-        workouts: workoutHistory.slice(-3),
+        workouts: workoutHistory.slice(-5),
         targets: userTargets
       })}.
       
       Calculations to perform internally:
       1. Check weekly weight trend. Is it > +0.5kg (Dirty Bulk) or < -0.7kg (Aggressive Cut)?
       2. Compare avg daily calories to target.
-      3. Check sleep/cardio vs lifting volume.
+      3. Check sleep/cardio vs lifting volume. Look for "Cardio" sessions in workouts.
 
       Output exactly 3 bullet points:
       1. Observation on adherence/trends.
@@ -1083,7 +566,7 @@ const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workoutHistor
       if (data.error) throw new Error(data.error.message);
       const resultText = data.candidates[0].content.parts[0].text;
       setGhostReport(resultText);
-    } catch (e) { setToast("Ghost Error: " + e.message); }
+    } catch (e) { setToast("Error: " + e.message); }
     setLoadingReport(false);
   };
 
@@ -1092,31 +575,51 @@ const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workoutHistor
   return (
     <div className="pb-24 p-4 space-y-6 animate-in fade-in">
        <div className="flex justify-between items-center"><h2 className="text-gray-400 font-bold text-sm tracking-widest uppercase">Analytics</h2><button onClick={() => {setLogDate(getLocalDate()); setShowDailyCheckin(true);}} className="bg-gray-800 hover:bg-blue-600 text-blue-400 hover:text-white text-xs font-bold px-3 py-1.5 rounded-lg border border-blue-500/30 flex items-center gap-2 transition-all"><Edit3 size={12}/> LOG ENTRY</button></div>
+       
        <div className="bg-gradient-to-br from-blue-900/20 to-purple-900/20 border border-blue-500/30 p-4 rounded-xl relative overflow-hidden">
           <div className="flex justify-between items-start mb-2"><h3 className="text-blue-300 font-black italic flex items-center gap-2"><Ghost size={16}/> GHOST REPORT</h3><button onClick={generateGhostReport} disabled={loadingReport} className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded-lg font-bold">{loadingReport ? <Loader2 size={12} className="animate-spin"/> : "ANALYZE"}</button></div>
           <div className="text-sm text-gray-200 leading-relaxed whitespace-pre-line">{ghostReport || "Tap analyze for insights..."}</div>
        </div>
+
        <div className="space-y-2"><div className="flex gap-2 overflow-x-auto pb-1">{['Weight', 'Cals', 'Sleep', 'Stress', 'Water', 'Cardio', 'Steps'].map(stat => (<button key={stat} onClick={() => setLocalStat(stat.toLowerCase())} className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap border ${localStat === stat.toLowerCase() ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 border-gray-700'}`}>{stat}</button>))}</div><div className="flex justify-center gap-4 text-xs font-bold text-gray-500">{['1W', '1M', '3M'].map(r => <button key={r} onClick={() => setTimeRange(r)} className={timeRange === r ? 'text-white underline' : ''}>{r}</button>)}</div></div>
-       <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 min-h-[300px] relative">
+       
+       <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 min-h-[200px] relative">
           <div className="flex justify-between mb-6"><h3 className="text-white font-bold capitalize">{localStat} Trend</h3></div>
           <div className="absolute inset-0 top-16 bottom-8 left-4 right-4 flex items-end justify-between">
              {filteredHistory.length === 0 ? <p className="text-gray-500 text-center w-full self-center">No data yet.</p> : (
                <svg className="w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
-                 <polyline fill="none" stroke="#3b82f6" strokeWidth="2" points={filteredHistory.map((d, i) => {
-                   const x = (i / (filteredHistory.length - 1 || 1)) * 100;
-                   const y = 100 - ((d[localStat] - 0) / (maxVal || 1)) * 80 - 10; // Simple scaling
-                   return `${x},${y}`;
-                 }).join(' ')} vectorEffect="non-scaling-stroke" />
-                 {filteredHistory.map((d, i) => {
-                   const x = (i / (filteredHistory.length - 1 || 1)) * 100;
-                   const y = 100 - ((d[localStat] - 0) / (maxVal || 1)) * 80 - 10;
-                   return <circle key={i} cx={x} cy={y} r="4" fill="#60a5fa" stroke="#3b82f6" strokeWidth="1" className="cursor-pointer hover:fill-white transition-all" onClick={() => setFocusedStatEntry(d)} />;
-                 })}
+                 <polyline fill="none" stroke="#3b82f6" strokeWidth="2" points={filteredHistory.map((d, i) => { const x = (i / (filteredHistory.length - 1 || 1)) * 100; const y = 100 - ((d[localStat] - 0) / (maxVal || 1)) * 80 - 10; return `${x},${y}`; }).join(' ')} vectorEffect="non-scaling-stroke" />
+                 {filteredHistory.map((d, i) => { const x = (i / (filteredHistory.length - 1 || 1)) * 100; const y = 100 - ((d[localStat] - 0) / (maxVal || 1)) * 80 - 10; return <circle key={i} cx={x} cy={y} r="4" fill="#60a5fa" stroke="#3b82f6" strokeWidth="1" className="cursor-pointer hover:fill-white transition-all" onClick={() => setFocusedStatEntry(d)} />; })}
                </svg>
              )}
           </div>
        </div>
-       {focusedStatEntry && <div className="bg-gray-900 border border-gray-700 p-4 rounded-xl text-center"><p className="text-gray-400 text-xs font-bold">{focusedStatEntry.date}</p><p className="text-2xl font-black text-white">{focusedStatEntry[localStat]} <span className="text-sm text-gray-500">{localStat}</span></p></div>}
+
+       {/* RECENT ACTIVITY LIST */}
+       <div>
+         <h3 className="text-gray-400 font-bold text-xs uppercase mb-2">Recent Activity</h3>
+         {recentActivity.length === 0 ? <p className="text-gray-600 text-sm">No workouts yet.</p> : (
+           <div className="space-y-2">
+             {recentActivity.map((session, i) => (
+               <div key={i} className="bg-gray-800 p-3 rounded-lg border border-gray-700 flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    {session.type === 'cardio' ? <HeartPulse size={16} className="text-red-400"/> : <Dumbbell size={16} className="text-blue-400"/>}
+                    <div>
+                      <p className="text-white font-bold text-sm">{session.name}</p>
+                      <p className="text-gray-500 text-xs">{session.date}</p>
+                    </div>
+                  </div>
+                  {session.type === 'cardio' && session.cardioData && (
+                    <div className="text-right">
+                       <p className="text-white text-xs font-bold">{session.cardioData.duration} min</p>
+                       <p className="text-orange-400 text-xs">{session.cardioData.calories} cal</p>
+                    </div>
+                  )}
+               </div>
+             ))}
+           </div>
+         )}
+       </div>
     </div>
   );
 };
@@ -1150,7 +653,6 @@ export default function App() {
   const [logDate, setLogDate] = useState(getLocalDate());
   const [dailyStatsInput, setDailyStatsInput] = useState({ weight: '', steps: '', water: '', stress: 3, fatigue: 3, sleepHours: '', sleepQuality: 3, cardio: '', activity: 3 });
 
-  // Auto-Checkin Logic
   useEffect(() => {
     const today = getLocalDate();
     if (!statsHistory.some(entry => entry.date === today)) {
@@ -1163,7 +665,6 @@ export default function App() {
     setConfirmState({ isOpen: true, message: msg, onConfirm: () => { action(); setConfirmState({ isOpen: false, message: '', onConfirm: null }); } });
   };
 
-  // Handlers
   const handleSortSplits = () => { let _s = [...workoutSplits]; const d = _s.splice(dragItem.current, 1)[0]; _s.splice(dragOverItem.current, 0, d); dragItem.current=null; dragOverItem.current=null; setWorkoutSplits(_s); };
   const handleSortMeals = () => { let _m = [...savedMeals]; const d = _m.splice(dragItem.current, 1)[0]; _m.splice(dragOverItem.current, 0, d); dragItem.current=null; dragOverItem.current=null; setSavedMeals(_m); };
   const addSplit = () => { const n = prompt("Name:"); if(n) setWorkoutSplits([...workoutSplits, {id:`s-${Date.now()}`,name:n,exercises:[]}]); };
@@ -1228,7 +729,7 @@ export default function App() {
           onSave={(session) => {
              const log = { 
                date: getLocalDate(), 
-               name: "Cardio", 
+               name: session.name, 
                type: 'cardio',
                exercises: [],
                cardioData: session
