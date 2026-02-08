@@ -31,6 +31,17 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync ios
 
+      - name: Configure iOS Settings (Version & Compliance)
+        run: |
+          cd ios/App/App
+          # Set Short Version to 1.1 (Visible to users)
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 1.1" Info.plist
+          # Set Build Version to GitHub Run Number (Unique for Apple internal tracking)
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ github.run_number }}" Info.plist
+          # Set Compliance to False (Removes Yellow Warning in TestFlight)
+          # We try to Add it; if it exists, we Set it.
+          /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" Info.plist || /usr/libexec/PlistBuddy -c "Set :ITSAppUsesNonExemptEncryption false" Info.plist
+
       - name: Create ExportOptions.plist
         run: |
           cat <<EOF > ios/App/ExportOptions.plist
