@@ -124,11 +124,3 @@ jobs:
           
           # Upload
           xcrun altool --upload-app --type ios --file $RUNNER_TEMP/output/App.ipa --apiKey "$API_KEY_ID" --apiIssuer "$API_ISSUER_ID"
-```
-
-### **Step 5: Fire!**
-Run this in VS Code Terminal:
-```powershell
-git add .
-git commit -m "Add auto-upload to TestFlight"
-git push
