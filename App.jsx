@@ -9,9 +9,9 @@ import {
 } from 'lucide-react';
 
 // --- CONFIGURATION ---
-const YOUR_GEMINI_API_KEY = "AIzaSyBIeVDLmfc1BfSEuMtZIWVVdZESFehu92Q"; 
+const YOUR_GEMINI_API_KEY = "AIzaSyC1r8-3IM2ZYKak_h-pVpyY77U4ZsEfMxs"; 
 const GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025";
-const APP_VERSION = "1.9"; 
+const APP_VERSION = "2.1"; 
 
 // --- GLOBAL STYLES ---
 const style = document.createElement('style');
@@ -20,6 +20,9 @@ style.innerHTML = `
   input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
   input[type=number] { -moz-appearance: textfield; }
   .no-select { user-select: none; -webkit-user-select: none; }
+  /* Hide scrollbar */
+  ::-webkit-scrollbar { display: none; }
+  body { -ms-overflow-style: none; scrollbar-width: none; background-color: #000; }
 `;
 document.head.appendChild(style);
 
@@ -117,7 +120,6 @@ function useStickyState(defaultValue, key) {
       const stickyValue = window.localStorage.getItem(key);
       const version = window.localStorage.getItem("GL_VERSION");
       
-      // FORCE RESET if version doesn't match
       if (version !== APP_VERSION) {
          window.localStorage.setItem("GL_VERSION", APP_VERSION);
          return defaultValue; 
@@ -150,7 +152,7 @@ const INITIAL_TARGETS = { CUT: { cal: 2200, p: 200, c: 0, f: 0 }, BULK: { cal: 3
 const Toast = ({ message, onClose }) => {
   useEffect(() => { const timer = setTimeout(onClose, 3000); return () => clearTimeout(timer); }, [onClose]);
   return (
-    <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-2xl border border-gray-700 z-[60] animate-in fade-in slide-in-from-bottom-4 flex items-center gap-3 pointer-events-none whitespace-nowrap">
+    <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-2xl border border-gray-700 z-[70] animate-in fade-in slide-in-from-bottom-4 flex items-center gap-3 pointer-events-none whitespace-nowrap">
       <Info size={18} className="text-blue-400"/><span className="text-sm font-medium">{message}</span>
     </div>
   );
@@ -210,7 +212,11 @@ const GhostChefModal = ({ isOpen, onClose, targets, currentTotals, apiKey, setTo
       const prompt = `I need a high-protein meal or snack idea. Target: approx ${reqCals} calories and ${reqProt}g protein. Constraints: ${carbLimit} ${fatLimit}. Style: Fancy/Gourmet but simple. Return JSON only: {"mealName": "Name", "ingredients": ["List with amounts"], "macros": {"cal": number, "p": number, "c": number, "f": number}, "reason": "Why fits"}`;
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
       const data = await response.json();
-      if (!data || !data.candidates) throw new Error(data.error?.message || "No AI response");
+      
+      if (!data || !data.candidates || !data.candidates[0]) {
+         throw new Error(data.error?.message || "AI Busy/Error");
+      }
+      
       setSuggestion(parseAIResponse(data.candidates[0].content.parts[0].text));
     } catch (e) { setToast("AI Error: " + e.message); }
     setLoading(false);
@@ -244,7 +250,6 @@ const TargetEditorModal = ({ isOpen, onClose, activePhase, setActivePhase, targe
       const prompt = `I am a bodybuilder currently ${editingPhase}ing. My weight is ${currentWeight}kg. Recommend Calorie target and Protein range (Min-Max). Rules: 1. Cut: TEE - 500kcal. Protein: 1.8-2.7g/kg. 2. Bulk: TEE + 300kcal. Protein: 1.6-2.2g/kg. 3. Maintain: TEE. Protein: 1.8-2.2g/kg. Ignore carbs/fats. Return JSON only: {"cal": number, "p_min": number, "p_max": number, "explanation": string}`;
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
       const data = await response.json();
-      if (!data || !data.candidates) throw new Error("No response");
       const result = parseAIResponse(data.candidates[0].content.parts[0].text);
       setLocalTargets({ ...localTargets, cal: result.cal, p: result.p_max }); 
       setGhostExplanation(result.explanation); setProteinRange(`${result.p_min} - ${result.p_max}g`); setToast("Ghost calculated new targets");
@@ -417,15 +422,10 @@ const TrainTab = ({
   };
 
   const finishWorkout = () => {
-    if (!activeSession) return;
+    if (!activeSession.exercises.length) { setMode('SPLIT_SELECT'); setActiveSession(null); return; }
     const log = { date: getLocalDate(), name: activeSession.name, exercises: activeSession.exercises.map(ex => ({ name: ex.name, sets: ex.sets.filter(s => s.weight && s.reps).map(s => ({ weight: s.weight, reps: s.reps })) })) };
-    
-    // Save Log
     setWorkoutHistory([...workoutHistory, log]);
-
-    // Handle Template Saving
     if (activeSession.splitId) {
-       // Update existing template
        const updatedSplits = workoutSplits.map(split => {
          if (split.id === activeSession.splitId) {
            const newExercises = activeSession.exercises.map(ex => ({ id: Date.now() + Math.random(), name: ex.name, defaultSets: ex.sets.length }));
@@ -435,15 +435,10 @@ const TrainTab = ({
        });
        setWorkoutSplits(updatedSplits);
     } else {
-      // Prompt for new template
-      if(confirm("Save this routine as a new template?")) {
-        const name = prompt("Name your workout:", "New Routine");
+      if(confirm("Save as new template?")) {
+        const name = prompt("Workout Name:");
         if(name) {
-          const newSplit = {
-            id: `s-${Date.now()}`,
-            name: name,
-            exercises: activeSession.exercises.map(ex => ({ id: Date.now() + Math.random(), name: ex.name, defaultSets: ex.sets.length }))
-          };
+          const newSplit = { id: `s-${Date.now()}`, name, exercises: activeSession.exercises.map(e => ({ id: Date.now(), name: e.name, defaultSets: e.sets.length })) };
           setWorkoutSplits([...workoutSplits, newSplit]);
         }
       }
@@ -451,25 +446,19 @@ const TrainTab = ({
     setActiveSession(null); setMode('SPLIT_SELECT');
   };
 
-  const cancelSession = () => { requestConfirm("Quit workout? Progress will be lost.", () => { setActiveSession(null); setMode('SPLIT_SELECT'); }); };
+  const cancelSession = () => { requestConfirm("Quit workout?", () => { setActiveSession(null); setMode('SPLIT_SELECT'); }); };
   const removeExerciseFromSession = (exIndex) => { requestConfirm("Remove exercise?", () => { const newExs = [...activeSession.exercises]; newExs.splice(exIndex, 1); setActiveSession({ ...activeSession, exercises: newExs }); }); };
   const updateSet = (exIdx, setIdx, field, value) => { const n = [...activeSession.exercises]; n[exIdx].sets[setIdx][field] = value; setActiveSession({...activeSession, exercises: n}); };
   const toggleSetComplete = (exIdx, setIdx) => { const n = [...activeSession.exercises]; n[exIdx].sets[setIdx].done = !n[exIdx].sets[setIdx].done; setActiveSession({...activeSession, exercises: n}); };
   const addSet = (exIdx) => { const n = [...activeSession.exercises]; n[exIdx].sets.push({weight:'',reps:'',done:false,target:{}}); setActiveSession({...activeSession, exercises: n}); };
   const removeSet = (exIdx, setIdx) => { const n = [...activeSession.exercises]; n[exIdx].sets.splice(setIdx, 1); setActiveSession({...activeSession, exercises: n}); };
-
+  
   const openTemplateEditor = (split) => { setEditingSplit(JSON.parse(JSON.stringify(split))); setMode('EDIT_TEMPLATE'); };
   const saveTemplate = () => { setWorkoutSplits(workoutSplits.map(s => s.id === editingSplit.id ? editingSplit : s)); setEditingSplit(null); setMode('SPLIT_SELECT'); };
   const addExerciseToTemplate = (name) => { if(!name) return; setEditingSplit(prev => ({ ...prev, exercises: [...prev.exercises, { id: Date.now(), name, defaultSets: 3 }] })); };
   const handleSortTemplateExercises = () => { let exs = [...editingSplit.exercises]; const dragged = exs.splice(dragItem.current, 1)[0]; exs.splice(dragOverItem.current, 0, dragged); dragItem.current = null; dragOverItem.current = null; setEditingSplit({ ...editingSplit, exercises: exs }); };
-  const deleteExerciseFromTemplate = (idx) => { requestConfirm("Delete exercise from template?", () => { const newExs = [...editingSplit.exercises]; newExs.splice(idx, 1); setEditingSplit({...editingSplit, exercises: newExs}); }); };
-  // New: Rename Split Logic
-  const handleRenameSplit = (id, currentName) => {
-    const newName = prompt("Rename Workout:", currentName);
-    if (newName) {
-       setWorkoutSplits(workoutSplits.map(s => s.id === id ? { ...s, name: newName } : s));
-    }
-  };
+  const deleteExerciseFromTemplate = (idx) => { requestConfirm("Delete exercise?", () => { const newExs = [...editingSplit.exercises]; newExs.splice(idx, 1); setEditingSplit({...editingSplit, exercises: newExs}); }); };
+  const handleRenameSplit = (id, currentName) => { const newName = prompt("Rename:", currentName); if(newName) setWorkoutSplits(workoutSplits.map(s => s.id === id ? { ...s, name: newName } : s)); };
 
   if (mode === 'SPLIT_SELECT') {
     return (
@@ -477,7 +466,7 @@ const TrainTab = ({
          <div className="flex justify-between items-end"><h2 className="text-gray-400 font-bold text-sm tracking-widest uppercase">Workouts</h2><button onClick={() => setWorkoutEditMode(!workoutEditMode)} className={`text-xs font-bold ${workoutEditMode ? 'text-green-400' : 'text-gray-500'}`}>{workoutEditMode ? 'DONE' : 'EDIT SPLITS'}</button></div>
          <button onClick={() => startSession(null)} className="w-full bg-blue-600/20 border border-blue-500/50 p-4 rounded-xl flex items-center justify-center gap-2 text-blue-400 font-bold hover:bg-blue-600/30 transition-all"><Plus size={20}/> Start Empty Workout</button>
          <button onClick={() => setShowCardioModal(true)} className="w-full bg-gray-800 border border-gray-700 p-4 rounded-xl flex items-center justify-center gap-2 text-gray-300 font-bold hover:bg-gray-700 transition-all"><HeartPulse size={20} className="text-red-400"/> Cardio +</button>
-         <div className="grid grid-cols-1 gap-3">{workoutSplits.map((split, i) => (<div key={split.id} className="flex gap-2" onDragEnter={() => dragOverItem.current = i}>{workoutEditMode && <div draggable onDragStart={() => dragItem.current = i} onDragEnd={handleSortSplits} className="bg-gray-800 p-2 rounded-l-xl border-y border-l border-gray-700 flex items-center justify-center cursor-move"><GripVertical size={20} className="text-gray-500"/></div>}<div className={`flex-1 flex items-center justify-between bg-gray-800 border border-gray-700 p-4 ${workoutEditMode ? 'rounded-r-xl' : 'rounded-xl'}`} onClick={() => !workoutEditMode && startSession(split)}><span className="font-bold text-lg text-white">{split.name}</span>{!workoutEditMode ? <button onClick={(e) => { e.stopPropagation(); openTemplateEditor(split); }} className="bg-gray-700 p-2 rounded-lg text-gray-300 hover:text-blue-400"><Edit3 size={16}/></button> : null}</div>{workoutEditMode && (<div className="flex flex-col gap-1"><button onClick={(e) => { e.stopPropagation(); handleRenameSplit(split.id, split.name) }} className="bg-gray-800 p-2 rounded-lg text-blue-400 border border-gray-700"><Edit3 size={14}/></button><button onClick={(e) => { e.stopPropagation(); deleteSplit(split.id) }} className="bg-gray-800 p-2 rounded-lg text-red-400 border border-gray-700"><Trash2 size={14}/></button></div>)}</div>))}
+         <div className="grid grid-cols-1 gap-3">{workoutSplits.map((split, i) => (<div key={split.id} className="flex gap-2" onDragEnter={() => dragOverItem.current = i}>{workoutEditMode && <div draggable onDragStart={() => dragItem.current = i} onDragEnd={handleSortSplits} className="bg-gray-800 p-2 rounded-l-xl border-y border-l border-gray-700 flex items-center justify-center cursor-move"><GripVertical size={20} className="text-gray-500"/></div>}<div className={`flex-1 flex items-center justify-between bg-gray-800 border border-gray-700 p-4 ${workoutEditMode ? 'rounded-r-xl' : 'rounded-xl'}`} onClick={() => !workoutEditMode && startSession(split)}><div className="flex items-center gap-2" onClick={(e) => { if(workoutEditMode) { e.stopPropagation(); handleRenameSplit(split.id, split.name); } }}><span className="font-bold text-lg text-white">{split.name}</span>{workoutEditMode && <Edit3 size={14} className="text-gray-500"/>}</div>{!workoutEditMode ? <button onClick={(e) => { e.stopPropagation(); openTemplateEditor(split); }} className="bg-gray-700 p-2 rounded-lg text-gray-300 hover:text-blue-400"><Edit3 size={16}/></button> : null}</div>{workoutEditMode && (<div className="flex flex-col gap-1"><button onClick={(e) => { e.stopPropagation(); handleRenameSplit(split.id, split.name) }} className="bg-gray-800 p-2 rounded-lg text-blue-400 border border-gray-700"><Edit3 size={14}/></button><button onClick={(e) => { e.stopPropagation(); deleteSplit(split.id) }} className="bg-gray-800 p-2 rounded-lg text-red-400 border border-gray-700"><Trash2 size={14}/></button></div>)}</div>))}
            {workoutEditMode && <button onClick={addSplit} className="bg-gray-900 border-2 border-dashed border-gray-700 p-4 rounded-xl text-gray-500 font-bold hover:text-white">+ ADD NEW SPLIT</button>}</div>
       </div>
     );
@@ -548,9 +537,8 @@ const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workoutHistor
     return statsHistory.filter(d => new Date(d.date) >= cutoff);
   }, [statsHistory, timeRange]);
 
-  // NEW: Get Recent Workouts/Cardio
   const recentActivity = useMemo(() => {
-    return [...workoutHistory].reverse().slice(0, 5); // Last 5 sessions
+    return [...workoutHistory].reverse().slice(0, 5); 
   }, [workoutHistory]);
 
   const generateGhostReport = async () => {
@@ -580,7 +568,7 @@ const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workoutHistor
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
       });
       const data = await response.json();
-      if (!data || !data.candidates) throw new Error(data.error?.message || "No AI response");
+      if (!data || !data.candidates || !data.candidates[0]) throw new Error(data.error?.message || "No AI response");
       const resultText = data.candidates[0].content.parts[0].text;
       setGhostReport(resultText);
     } catch (e) { setToast("Error: " + e.message); }
@@ -591,11 +579,11 @@ const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workoutHistor
   const minVal = Math.min(...filteredHistory.map(d => d[localStat] || 0), 0);
   const range = maxVal - minVal || 1;
 
-  // Generate SVG Points (Exclude Cardio from graph to avoid confusion, it's in list below)
+  // Generate SVG Points (Cardio visualised in 'Cardio' mode or just standard lines for others)
   const polylinePoints = filteredHistory.map((d, i) => {
-    const val = d[localStat] || 0;
+    const val = localStat === 'cardio' ? (d.cardio || 0) : (d[localStat] || 0); 
     const x = (i / (filteredHistory.length - 1 || 1)) * 100;
-    const y = 100 - ((val - minVal) / range) * 80 - 10;
+    const y = 100 - ((val - minVal) / (range || 1)) * 80 - 10;
     return `${x},${y}`;
   }).join(' ');
   
@@ -608,34 +596,35 @@ const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workoutHistor
           <div className="text-sm text-gray-200 leading-relaxed whitespace-pre-line">{ghostReport || "Tap analyze for insights..."}</div>
        </div>
 
-       <div className="space-y-2"><div className="flex gap-2 overflow-x-auto pb-1">{['Weight', 'Cals', 'Sleep', 'Stress', 'Water', 'Steps'].map(stat => (<button key={stat} onClick={() => {setLocalStat(stat.toLowerCase()); setFocusedStatEntry(null);}} className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap border ${localStat === stat.toLowerCase() ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 border-gray-700'}`}>{stat}</button>))}</div><div className="flex justify-center gap-4 text-xs font-bold text-gray-500">{['1W', '1M', '3M'].map(r => <button key={r} onClick={() => setTimeRange(r)} className={timeRange === r ? 'text-white underline' : ''}>{r}</button>)}</div></div>
+       <div className="space-y-2"><div className="flex gap-2 overflow-x-auto pb-1">{['Weight', 'Cals', 'Sleep', 'Stress', 'Water', 'Steps', 'Cardio'].map(stat => (<button key={stat} onClick={() => {setLocalStat(stat.toLowerCase()); setFocusedStatEntry(null);}} className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap border ${localStat === stat.toLowerCase() ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 border-gray-700'}`}>{stat}</button>))}</div><div className="flex justify-center gap-4 text-xs font-bold text-gray-500">{['1W', '1M', '3M'].map(r => <button key={r} onClick={() => setTimeRange(r)} className={timeRange === r ? 'text-white underline' : ''}>{r}</button>)}</div></div>
        
        <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 min-h-[200px] relative">
           <div className="flex justify-between mb-6"><h3 className="text-white font-bold capitalize">{localStat} Trend</h3></div>
           <div className="absolute inset-0 top-16 bottom-8 left-4 right-4 flex items-end justify-between">
              {filteredHistory.length === 0 ? <p className="text-gray-500 text-center w-full self-center">No data yet.</p> : (
                <svg className="w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
-                 <polyline fill="none" stroke="#3b82f6" strokeWidth="2" points={polylinePoints} vectorEffect="non-scaling-stroke" />
+                 <polyline fill="none" stroke={localStat === 'cardio' ? '#f97316' : '#3b82f6'} strokeWidth="2" points={polylinePoints} vectorEffect="non-scaling-stroke" />
                  {filteredHistory.map((d, i) => { 
-                    const val = d[localStat] || 0;
+                    const val = localStat === 'cardio' ? (d.cardio || 0) : (d[localStat] || 0);
                     const x = (i / (filteredHistory.length - 1 || 1)) * 100; 
-                    const y = 100 - ((val - minVal) / range) * 80 - 10; 
-                    return <circle key={i} cx={x} cy={y} r="6" fill="#60a5fa" stroke="#3b82f6" strokeWidth="2" className="cursor-pointer hover:fill-white transition-all" onClick={() => setFocusedStatEntry(d)} />; 
+                    const y = 100 - ((val - minVal) / (range || 1)) * 80 - 10; 
+                    return <circle key={i} cx={x} cy={y} r="8" fill={localStat === 'cardio' ? '#f97316' : '#60a5fa'} stroke="white" strokeWidth="2" className="cursor-pointer hover:scale-125 transition-all" onClick={() => setFocusedStatEntry(d)} />; 
                  })}
                </svg>
              )}
           </div>
           {/* FOCUSED STAT POPUP */}
           {focusedStatEntry && (
-            <div className="absolute top-16 left-1/2 transform -translate-x-1/2 bg-gray-900 border border-blue-500/50 p-2 rounded-lg shadow-xl text-center z-10 animate-in fade-in zoom-in-95">
-               <p className="text-[10px] text-gray-400 font-bold uppercase">{focusedStatEntry.date}</p>
-               <p className="text-xl font-black text-white">{focusedStatEntry[localStat] || 0} <span className="text-xs text-blue-400 font-normal">{localStat}</span></p>
+            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gray-900 border border-white/20 p-4 rounded-xl shadow-2xl text-center z-20 animate-in fade-in zoom-in-95 w-40">
+               <p className="text-xs text-gray-400 font-bold uppercase mb-1">{focusedStatEntry.date}</p>
+               <p className="text-2xl font-black text-white">{localStat === 'cardio' ? (focusedStatEntry.cardio || 0) : (focusedStatEntry[localStat] || 0)} <span className="text-xs text-blue-400 font-normal">{localStat === 'cardio' ? 'min' : localStat}</span></p>
+               <button onClick={() => setFocusedStatEntry(null)} className="mt-2 text-[10px] text-gray-500 underline">CLOSE</button>
             </div>
           )}
        </div>
 
        {/* RECENT ACTIVITY LIST */}
-       <div>
+       <div className="pb-20"> 
          <h3 className="text-gray-400 font-bold text-xs uppercase mb-2">Recent Activity</h3>
          {recentActivity.length === 0 ? <p className="text-gray-600 text-sm">No workouts yet.</p> : (
            <div className="space-y-2">
@@ -727,7 +716,8 @@ export default function App() {
       cals: dailyTotals.cal||0, 
       sleep: parseFloat(dailyStatsInput.sleepHours)||0, 
       stress: dailyStatsInput.stress, 
-      fatigue: dailyStatsInput.fatigue 
+      fatigue: dailyStatsInput.fatigue,
+      cardio: parseFloat(dailyStatsInput.cardio)||0
     };
     if (idx >= 0) { const h = [...statsHistory]; h[idx] = { ...h[idx], ...entry }; setStatsHistory(h); }
     else setStatsHistory([...statsHistory, entry].sort((a,b) => new Date(a.date) - new Date(b.date)));
@@ -770,6 +760,7 @@ export default function App() {
           isOpen={showCardioModal} 
           onClose={() => setShowCardioModal(false)} 
           onSave={(session) => {
+             // 1. Add to Workout History (for the list)
              const log = { 
                date: getLocalDate(), 
                name: session.name, 
@@ -778,6 +769,22 @@ export default function App() {
                cardioData: session
              };
              setWorkoutHistory([...workoutHistory, log]);
+
+             // 2. Also update Daily Stats for the Graph
+             // We find today's entry and add the minutes to it
+             const today = getLocalDate();
+             const existingIdx = statsHistory.findIndex(e => e.date === today);
+             const newMins = session.duration;
+             
+             if (existingIdx >= 0) {
+                const updatedStats = [...statsHistory];
+                updatedStats[existingIdx].cardio = (updatedStats[existingIdx].cardio || 0) + newMins;
+                setStatsHistory(updatedStats);
+             } else {
+                // If no entry today, create one with just cardio
+                setStatsHistory([...statsHistory, { date: today, cardio: newMins }].sort((a,b) => new Date(a.date) - new Date(b.date)));
+             }
+             
              setToastMsg("Cardio Logged");
           }}
         />
