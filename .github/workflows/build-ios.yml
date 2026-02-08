@@ -1,4 +1,4 @@
-name: Build iOS App
+name: Build & Upload iOS App
 
 on:
   push:
@@ -89,16 +89,9 @@ jobs:
       - name: Inject Signing Settings
         run: |
           cd ios/App
-          
-          # 1. Fix the PODS (Helper Libraries)
-          # We tell Pods to use your Team ID, but keep signing AUTOMATIC so they don't ask for a profile.
           sed -i '' "s/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = 2H8G9ZY6PP;/g" Pods/Pods.xcodeproj/project.pbxproj
           sed -i '' "s/CODE_SIGN_STYLE = .*/CODE_SIGN_STYLE = Automatic;/g" Pods/Pods.xcodeproj/project.pbxproj
           sed -i '' "s/PROVISIONING_PROFILE_SPECIFIER = .*/PROVISIONING_PROFILE_SPECIFIER = \"\";/g" Pods/Pods.xcodeproj/project.pbxproj
-          
-          # 2. Fix the MAIN APP
-          # We specifically find the Bundle ID line in the App project and inject your Profile Name right next to it.
-          # This ensures ONLY the main app gets the manual profile.
           sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER = com.ghostlog.app;/PRODUCT_BUNDLE_IDENTIFIER = com.ghostlog.app; PROVISIONING_PROFILE_SPECIFIER = "GhostLog App Store"; CODE_SIGN_STYLE = Manual; DEVELOPMENT_TEAM = 2H8G9ZY6PP;/g' App.xcodeproj/project.pbxproj
 
       - name: Build Archive
@@ -111,8 +104,6 @@ jobs:
             -configuration Release \
             -archivePath $RUNNER_TEMP/GhostLog.xcarchive \
             CODE_SIGN_IDENTITY="iPhone Distribution"
-            # NOTE: We removed the PROVISIONING_PROFILE_SPECIFIER flag from here.
-            # It is now handled by the 'Inject Signing Settings' step above.
 
       - name: Export IPA
         run: |
@@ -121,8 +112,23 @@ jobs:
             -exportOptionsPlist ios/App/ExportOptions.plist \
             -exportPath $RUNNER_TEMP/output
 
-      - name: Upload IPA
-        uses: actions/upload-artifact@v4
-        with:
-          name: GhostLog-iOS
-          path: /Users/runner/work/_temp/output/App.ipa
+      - name: Upload to App Store Connect
+        env:
+          API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          # Decode API Key to file
+          mkdir -p ~/.private_keys
+          echo -n "$API_KEY_BASE64" > ~/.private_keys/AuthKey_$API_KEY_ID.p8
+          
+          # Upload
+          xcrun altool --upload-app --type ios --file $RUNNER_TEMP/output/App.ipa --apiKey "$API_KEY_ID" --apiIssuer "$API_ISSUER_ID"
+```
+
+### **Step 5: Fire!**
+Run this in VS Code Terminal:
+```powershell
+git add .
+git commit -m "Add auto-upload to TestFlight"
+git push
