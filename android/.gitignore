@@ -1,14 +1,16 @@
-node_modules/
-dist/
+# Gradle files
+build/
+.gradle/
+local.properties
+
+# IntelliJ Workspace
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Mac
 .DS_Store
-.env
-*.log
-android/.gradle/
-android/local.properties
-android/build/
-android/app/build/
-android/.idea/
-ios/DerivedData/
-ios/Pods/
-ios/App/App.xcworkspace/xcuserdata/
-capacitor.config.json.timestamp
+
+# App build folder
+app/build/

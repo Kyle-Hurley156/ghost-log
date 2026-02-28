@@ -1,1 +1,20 @@
-node_modules
+node_modules/
+dist/
+.DS_Store
+.env
+*.log
+
+# Android Heavy Files
+android/.gradle/
+android/local.properties
+android/build/
+android/app/build/
+android/.idea/
+
+# iOS Heavy Files
+ios/DerivedData/
+ios/Pods/
+ios/App/App.xcworkspace/xcuserdata/
+
+# Capacitor Temp
+capacitor.config.json.timestamp
