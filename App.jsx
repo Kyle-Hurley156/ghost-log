@@ -11,7 +11,7 @@ import {
 // --- CONFIGURATION ---
 const YOUR_GEMINI_API_KEY = "AIzaSyC8af90GvDo8jlQ83shPwiyIBMd4Pi7bZ4"; 
 const GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025";
-const APP_VERSION = "2.3"; // Bumped for Notch & Cardio Graph Fixes
+const APP_VERSION = "2.4"; // Bumped for AI Cooldowns
 
 // --- GLOBAL STYLES ---
 const style = document.createElement('style');
@@ -20,6 +20,7 @@ style.innerHTML = `
   input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
   input[type=number] { -moz-appearance: textfield; }
   .no-select { user-select: none; -webkit-user-select: none; }
+  /* Hide scrollbar */
   ::-webkit-scrollbar { display: none; }
   body { -ms-overflow-style: none; scrollbar-width: none; background-color: #000; }
 `;
@@ -195,15 +196,20 @@ const CardioModal = ({ isOpen, onClose, onSave }) => {
   );
 };
 
-const GhostChefModal = ({ isOpen, onClose, targets, currentTotals, apiKey, setToast }) => {
+const GhostChefModal = ({ isOpen, onClose, targets, currentTotals, apiKey, setToast, aiCooldown, setAiCooldown }) => {
   const [loading, setLoading] = useState(false);
   const [suggestion, setSuggestion] = useState(null);
   const [reqCals, setReqCals] = useState(0);
   const [reqProt, setReqProt] = useState(0);
+  
   useEffect(() => { if (isOpen) { setReqCals(Math.max(0, targets.cal - currentTotals.cal)); setReqProt(Math.max(0, targets.p - currentTotals.p)); } }, [isOpen, targets, currentTotals]);
+  
   if (!isOpen) return null;
+  
   const handleGetSuggestion = async () => {
     if(!apiKey) { setToast("API Key missing"); return; }
+    if(aiCooldown > 0) { setToast(`Ghost is resting for ${aiCooldown}s`); return; }
+    
     setLoading(true);
     try {
       const carbLimit = targets.c > 0 ? `Keep Carbs under ${targets.c}g.` : '';
@@ -211,23 +217,40 @@ const GhostChefModal = ({ isOpen, onClose, targets, currentTotals, apiKey, setTo
       const prompt = `I need a high-protein meal or snack idea. Target: approx ${reqCals} calories and ${reqProt}g protein. Constraints: ${carbLimit} ${fatLimit}. Style: Fancy/Gourmet but simple. Return JSON only: {"mealName": "Name", "ingredients": ["List with amounts"], "macros": {"cal": number, "p": number, "c": number, "f": number}, "reason": "Why fits"}`;
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
       const data = await response.json();
+      
       if (!data || !data.candidates || !data.candidates[0]) { throw new Error(data.error?.message || "AI Busy/Error"); }
+      
       setSuggestion(parseAIResponse(data.candidates[0].content.parts[0].text));
-    } catch (e) { setToast("AI Error: " + e.message); }
+      setAiCooldown(10); // Set 10s cooldown on success
+    } catch (e) { 
+      setToast("AI Error: " + e.message); 
+      setAiCooldown(5); // Set 5s cooldown on failure to prevent spam
+    }
     setLoading(false);
   };
+
   return (
     <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 animate-in fade-in">
       <div className="bg-gray-800 w-full max-w-sm rounded-2xl p-6 border border-gray-700 shadow-2xl">
         <div className="flex justify-between items-center mb-4"><h3 className="text-xl font-black italic text-white flex items-center gap-2"><ChefHat className="text-blue-400"/> GHOST CHEF</h3><button onClick={onClose}><X size={24} className="text-gray-500"/></button></div>
         <div className="bg-gray-900 p-4 rounded-xl mb-4 text-center"><p className="text-gray-400 text-xs uppercase font-bold">Budget Remaining</p><div className="flex justify-center gap-4 mt-2"><div><span className="text-xl font-bold text-white">{reqCals}</span> <span className="text-xs text-gray-500">kcal</span></div><div><span className="text-xl font-bold text-blue-400">{reqProt}g</span> <span className="text-xs text-gray-500">prot</span></div></div></div>
-        {!suggestion ? <button onClick={handleGetSuggestion} disabled={loading} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2">{loading ? <Loader2 className="animate-spin"/> : <><Sparkles size={18}/> GENERATE RECIPE</>}</button> : <div className="space-y-4 animate-in slide-in-from-bottom-4"><div className="bg-gray-700/50 p-4 rounded-xl border border-gray-600"><h4 className="text-lg font-bold text-white mb-1">{suggestion.mealName}</h4><p className="text-xs text-blue-200 italic mb-3">{suggestion.reason}</p><ul className="text-sm text-gray-300 list-disc pl-4 space-y-1 mb-3">{suggestion.ingredients.map((ing, i) => <li key={i}>{ing}</li>)}</ul><div className="flex gap-3 text-xs font-mono border-t border-gray-600 pt-2"><span className="text-white">{suggestion.macros.cal} kcal</span><span className="text-red-300">{suggestion.macros.p}p</span><span className="text-orange-300">{suggestion.macros.c}c</span><span className="text-yellow-300">{suggestion.macros.f}f</span></div></div><button onClick={handleGetSuggestion} className="w-full bg-gray-700 text-gray-300 py-3 rounded-xl font-bold text-xs">TRY ANOTHER</button></div>}
+        {!suggestion ? (
+          <button onClick={handleGetSuggestion} disabled={loading || aiCooldown > 0} className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-400 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all">
+            {loading ? <Loader2 className="animate-spin"/> : aiCooldown > 0 ? <><Timer size={18}/> RESTING ({aiCooldown}s)</> : <><Sparkles size={18}/> GENERATE RECIPE</>}
+          </button>
+        ) : (
+          <div className="space-y-4 animate-in slide-in-from-bottom-4"><div className="bg-gray-700/50 p-4 rounded-xl border border-gray-600"><h4 className="text-lg font-bold text-white mb-1">{suggestion.mealName}</h4><p className="text-xs text-blue-200 italic mb-3">{suggestion.reason}</p><ul className="text-sm text-gray-300 list-disc pl-4 space-y-1 mb-3">{suggestion.ingredients.map((ing, i) => <li key={i}>{ing}</li>)}</ul><div className="flex gap-3 text-xs font-mono border-t border-gray-600 pt-2"><span className="text-white">{suggestion.macros.cal} kcal</span><span className="text-red-300">{suggestion.macros.p}p</span><span className="text-orange-300">{suggestion.macros.c}c</span><span className="text-yellow-300">{suggestion.macros.f}f</span></div></div>
+            <button onClick={handleGetSuggestion} disabled={loading || aiCooldown > 0} className="w-full bg-gray-700 disabled:bg-gray-800 disabled:text-gray-600 text-gray-300 py-3 rounded-xl font-bold text-xs transition-all">
+              {aiCooldown > 0 ? `RESTING (${aiCooldown}s)` : "TRY ANOTHER"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
-const TargetEditorModal = ({ isOpen, onClose, activePhase, setActivePhase, targets, setTargets, currentWeight, apiKey, setToast }) => {
+const TargetEditorModal = ({ isOpen, onClose, activePhase, setActivePhase, targets, setTargets, currentWeight, apiKey, setToast, aiCooldown, setAiCooldown }) => {
   const [editingPhase, setEditingPhase] = useState(activePhase); 
   const [localTargets, setLocalTargets] = useState(targets[activePhase] || INITIAL_TARGETS[activePhase]);
   const [loading, setLoading] = useState(false);
@@ -240,15 +263,22 @@ const TargetEditorModal = ({ isOpen, onClose, activePhase, setActivePhase, targe
   if (!isOpen) return null;
 
   const handleAutoCalculate = async () => {
+    if(aiCooldown > 0) { setToast(`Ghost is resting for ${aiCooldown}s`); return; }
     setLoading(true);
     try {
       const prompt = `I am a bodybuilder currently ${editingPhase}ing. My weight is ${currentWeight}kg. Recommend Calorie target and Protein range (Min-Max). Rules: 1. Cut: TEE - 500kcal. Protein: 1.8-2.7g/kg. 2. Bulk: TEE + 300kcal. Protein: 1.6-2.2g/kg. 3. Maintain: TEE. Protein: 1.8-2.2g/kg. Ignore carbs/fats. Return JSON only: {"cal": number, "p_min": number, "p_max": number, "explanation": string}`;
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
       const data = await response.json();
+      if (!data || !data.candidates) throw new Error("No response");
       const result = parseAIResponse(data.candidates[0].content.parts[0].text);
       setLocalTargets({ ...localTargets, cal: result.cal, p: result.p_max }); 
-      setGhostExplanation(result.explanation); setProteinRange(`${result.p_min} - ${result.p_max}g`); setToast("Ghost calculated new targets");
-    } catch (e) { setToast("AI Error"); }
+      setGhostExplanation(result.explanation); setProteinRange(`${result.p_min} - ${result.p_max}g`); 
+      setToast("Ghost calculated new targets");
+      setAiCooldown(10);
+    } catch (e) { 
+      setToast("AI Error"); 
+      setAiCooldown(5);
+    }
     setLoading(false);
   };
 
@@ -269,7 +299,9 @@ const TargetEditorModal = ({ isOpen, onClose, activePhase, setActivePhase, targe
             <div><label className="text-[10px] text-gray-500 font-bold uppercase text-center block">Fats (Optional)</label><input type="number" value={localTargets.f||''} onChange={e=>setLocalTargets({...localTargets, f:parseInt(e.target.value)||''})} placeholder="-" className="w-full bg-gray-900 p-2 rounded-lg text-gray-400 text-center border border-gray-700 text-xs"/></div>
           </div>
         </div>
-        <button onClick={handleAutoCalculate} disabled={loading} className="w-full mt-6 bg-gray-700 hover:bg-gray-600 text-blue-300 text-xs font-bold py-3 rounded-xl flex items-center justify-center gap-2">{loading ? <Loader2 size={14} className="animate-spin"/> : <><Wand2 size={14}/> ASK GHOST TO CALCULATE</>}</button>
+        <button onClick={handleAutoCalculate} disabled={loading || aiCooldown > 0} className="w-full mt-6 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-500 text-blue-300 text-xs font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-all">
+          {loading ? <Loader2 size={14} className="animate-spin"/> : aiCooldown > 0 ? <><Timer size={14}/> RESTING ({aiCooldown}s)</> : <><Wand2 size={14}/> ASK GHOST TO CALCULATE</>}
+        </button>
         <button onClick={handleSave} className="w-full mt-2 bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-xl">SAVE {editingPhase} TARGETS</button>
       </div>
     </div>
@@ -302,7 +334,7 @@ const ExerciseSearchInput = ({ onAdd }) => {
   );
 };
 
-const AddMealModal = ({ isOpen, onClose, onSave, apiKey, setToast }) => {
+const AddMealModal = ({ isOpen, onClose, onSave, apiKey, setToast, aiCooldown, setAiCooldown }) => {
   const [mealName, setMealName] = useState('');
   const [ingredients, setIngredients] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -310,12 +342,54 @@ const AddMealModal = ({ isOpen, onClose, onSave, apiKey, setToast }) => {
   const [loading, setLoading] = useState(false);
   const [currentFood, setCurrentFood] = useState({ name: '', cal: '', p: '', c: '', f: '' });
   const fileInputRef = useRef(null);
+  
   if (!isOpen) return null;
-  const handleSearch = async () => { if (!searchQuery) return; setLoading(true); try { const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: `Identify food "${searchQuery}". Return JSON per 100g: {"name":string,"cal":number,"p":number,"c":number,"f":number} ONLY JSON` }] }] }) }); const data = await response.json(); const result = parseAIResponse(data.candidates[0].content.parts[0].text); setCurrentFood({ name: result.name, cal: result.cal, p: result.p, c: result.c, f: result.f }); } catch (e) { setToast("AI Error: " + e.message); } setLoading(false); };
-  const handleImageUpload = (e) => { const file = e.target.files[0]; if (file) { setLoading(true); const reader = new FileReader(); reader.onloadend = async () => { try { const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: `Identify food in image. Return JSON per 100g: {"name":string,"cal":number,"p":number,"c":number,"f":number} ONLY JSON` }, { inline_data: { mime_type: "image/jpeg", data: reader.result.split(',')[1] } }] }] }) }); const data = await response.json(); const result = parseAIResponse(data.candidates[0].content.parts[0].text); setSearchQuery(result.name); setCurrentFood({ name: result.name, cal: result.cal, p: result.p, c: result.c, f: result.f }); } catch (e) { setToast("Scan Error: " + e.message); } setLoading(false); }; reader.readAsDataURL(file); } };
+  
+  const handleSearch = async () => { 
+    if (!searchQuery) return; 
+    if(aiCooldown > 0) { setToast(`Ghost is resting for ${aiCooldown}s`); return; }
+    setLoading(true); 
+    try { 
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: `Identify food "${searchQuery}". Return JSON per 100g: {"name":string,"cal":number,"p":number,"c":number,"f":number} ONLY JSON` }] }] }) }); 
+      const data = await response.json(); 
+      const result = parseAIResponse(data.candidates[0].content.parts[0].text); 
+      setCurrentFood({ name: result.name, cal: result.cal, p: result.p, c: result.c, f: result.f }); 
+      setAiCooldown(5); // Shorter lock for small text search
+    } catch (e) { 
+      setToast("AI Error: " + e.message); 
+      setAiCooldown(3);
+    } 
+    setLoading(false); 
+  };
+  
+  const handleImageUpload = (e) => { 
+    const file = e.target.files[0]; 
+    if (file) { 
+      if(aiCooldown > 0) { setToast(`Ghost is resting for ${aiCooldown}s`); return; }
+      setLoading(true); 
+      const reader = new FileReader(); 
+      reader.onloadend = async () => { 
+        try { 
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: `Identify food in image. Return JSON per 100g: {"name":string,"cal":number,"p":number,"c":number,"f":number} ONLY JSON` }, { inline_data: { mime_type: "image/jpeg", data: reader.result.split(',')[1] } }] }] }) }); 
+          const data = await response.json(); 
+          const result = parseAIResponse(data.candidates[0].content.parts[0].text); 
+          setSearchQuery(result.name); 
+          setCurrentFood({ name: result.name, cal: result.cal, p: result.p, c: result.c, f: result.f }); 
+          setAiCooldown(5);
+        } catch (e) { 
+          setToast("Scan Error: " + e.message); 
+          setAiCooldown(3);
+        } 
+        setLoading(false); 
+      }; 
+      reader.readAsDataURL(file); 
+    } 
+  };
+  
   const addIngredient = () => { const name = currentFood.name || searchQuery || "Food"; if (name && weight) { const m = parseFloat(weight) / 100; setIngredients([...ingredients, { id: Date.now(), name: `${name} (${weight}g)`, cal: Math.round((currentFood.cal||0)*m), p: Math.round((currentFood.p||0)*m), c: Math.round((currentFood.c||0)*m), f: Math.round((currentFood.f||0)*m), active: true }]); setSearchQuery(''); setWeight(''); setCurrentFood({ name: '', cal: '', p: '', c: '', f: '' }); } };
   const removeIngredient = (index) => { const newIngredients = [...ingredients]; newIngredients.splice(index, 1); setIngredients(newIngredients); };
   const handleSave = () => { if (mealName && ingredients.length > 0) { onSave({ id: Date.now(), name: mealName, ingredients: ingredients }); setMealName(''); setIngredients([]); onClose(); } };
+  
   return (
     <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4 animate-in fade-in">
       <div className="bg-gray-800 w-full max-w-md rounded-2xl p-6 border border-gray-700 shadow-2xl h-[80vh] flex flex-col">
@@ -325,7 +399,7 @@ const AddMealModal = ({ isOpen, onClose, onSave, apiKey, setToast }) => {
           <div className="space-y-2">{ingredients.map((ing, i) => (<div key={ing.id} className="bg-gray-900 p-2 rounded flex justify-between items-center text-sm border border-gray-700"><span className="text-white">{ing.name}</span><span className="text-gray-400 text-xs">{ing.cal}kcal</span><button onClick={() => removeIngredient(i)} className="text-red-400"><Trash2 size={16}/></button></div>))}</div>
           <div className="bg-gray-900/50 p-3 rounded-xl border border-dashed border-gray-700 relative">
             {loading && <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10"><Loader2 className="animate-spin text-blue-500"/></div>}
-            <div className="flex gap-2 mb-3"><div className="relative flex-1"><input type="text" placeholder="Search Food" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} className="w-full bg-gray-800 p-2 rounded text-sm text-white outline-none border border-gray-600"/><button onClick={handleSearch} className="absolute right-2 top-2 text-gray-400"><Search size={16}/></button></div><input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden"/><button onClick={() => fileInputRef.current.click()} className="bg-gray-800 p-2 rounded border border-gray-600 text-gray-400"><Camera size={20}/></button></div>
+            <div className="flex gap-2 mb-3"><div className="relative flex-1"><input type="text" placeholder="Search Food" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} className="w-full bg-gray-800 p-2 rounded text-sm text-white outline-none border border-gray-600"/><button onClick={handleSearch} disabled={loading || aiCooldown > 0} className="absolute right-2 top-2 text-gray-400 disabled:opacity-50"><Search size={16}/></button></div><input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden"/><button onClick={() => fileInputRef.current.click()} disabled={loading || aiCooldown > 0} className="bg-gray-800 p-2 rounded border border-gray-600 text-gray-400 disabled:opacity-50"><Camera size={20}/></button></div>
             <div className="grid grid-cols-4 gap-2 mb-3">{['cal','p','c','f'].map(k => <input key={k} type="number" placeholder={k.toUpperCase()} value={currentFood[k]} onChange={e => setCurrentFood({...currentFood, [k]: e.target.value})} className="bg-gray-800 p-2 rounded text-xs text-white border border-gray-600 text-center"/>)}</div>
             <div className="flex gap-2"><input type="number" placeholder="Weight (g)" value={weight} onChange={e => setWeight(e.target.value)} className="flex-1 bg-gray-800 p-2 rounded text-sm text-white border border-gray-600"/><button onClick={addIngredient} className="px-4 bg-blue-600 text-white rounded font-bold text-xs">ADD</button></div>
           </div>
@@ -441,7 +515,7 @@ const TrainTab = ({
     setActiveSession(null); setMode('SPLIT_SELECT');
   };
 
-  const cancelSession = () => { requestConfirm("Quit workout? Progress will be lost.", () => { setActiveSession(null); setMode('SPLIT_SELECT'); }); };
+  const cancelSession = () => { requestConfirm("Quit workout?", () => { setActiveSession(null); setMode('SPLIT_SELECT'); }); };
   const removeExerciseFromSession = (exIndex) => { requestConfirm("Remove exercise?", () => { const newExs = [...activeSession.exercises]; newExs.splice(exIndex, 1); setActiveSession({ ...activeSession, exercises: newExs }); }); };
   const updateSet = (exIdx, setIdx, field, value) => { const n = [...activeSession.exercises]; n[exIdx].sets[setIdx][field] = value; setActiveSession({...activeSession, exercises: n}); };
   const toggleSetComplete = (exIdx, setIdx) => { const n = [...activeSession.exercises]; n[exIdx].sets[setIdx].done = !n[exIdx].sets[setIdx].done; setActiveSession({...activeSession, exercises: n}); };
@@ -519,7 +593,7 @@ const EatTab = ({ savedMeals, dailyLog, mealEditMode, setMealEditMode, setShowAd
 };
 
 // --- STATS TAB ---
-const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workoutHistory, apiKey, setToast, userTargets, phase }) => {
+const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workoutHistory, apiKey, setToast, userTargets, phase, aiCooldown, setAiCooldown }) => {
   const [localStat, setLocalStat] = useState('weight');
   const [timeRange, setTimeRange] = useState('1W');
   const [focusedStatEntry, setFocusedStatEntry] = useState(null);
@@ -532,13 +606,13 @@ const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workoutHistor
     return statsHistory.filter(d => new Date(d.date) >= cutoff);
   }, [statsHistory, timeRange]);
 
-  // NEW: Get Recent Workouts/Cardio
   const recentActivity = useMemo(() => {
     return [...workoutHistory].reverse().slice(0, 5); 
   }, [workoutHistory]);
 
   const generateGhostReport = async () => {
     if (!apiKey) { setToast("API Key Missing"); return; }
+    if (aiCooldown > 0) { setToast(`Ghost is resting for ${aiCooldown}s`); return; }
     setLoadingReport(true);
     try {
       const prompt = `Analyze this bodybuilding data for someone currently ${phase}ing with a target of ${userTargets.cal} calories. 
@@ -567,7 +641,11 @@ const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workoutHistor
       if (!data || !data.candidates || !data.candidates[0]) throw new Error(data.error?.message || "No AI response");
       const resultText = data.candidates[0].content.parts[0].text;
       setGhostReport(resultText);
-    } catch (e) { setToast("Error: " + e.message); }
+      setAiCooldown(10);
+    } catch (e) { 
+      setToast("Error: " + e.message); 
+      setAiCooldown(5);
+    }
     setLoadingReport(false);
   };
 
@@ -587,7 +665,11 @@ const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workoutHistor
        <div className="flex justify-between items-center"><h2 className="text-gray-400 font-bold text-sm tracking-widest uppercase">Analytics</h2><button onClick={() => {setLogDate(getLocalDate()); setShowDailyCheckin(true);}} className="bg-gray-800 hover:bg-blue-600 text-blue-400 hover:text-white text-xs font-bold px-3 py-1.5 rounded-lg border border-blue-500/30 flex items-center gap-2 transition-all"><Edit3 size={12}/> LOG ENTRY</button></div>
        
        <div className="bg-gradient-to-br from-blue-900/20 to-purple-900/20 border border-blue-500/30 p-4 rounded-xl relative overflow-hidden">
-          <div className="flex justify-between items-start mb-2"><h3 className="text-blue-300 font-black italic flex items-center gap-2"><Ghost size={16}/> GHOST REPORT</h3><button onClick={generateGhostReport} disabled={loadingReport} className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded-lg font-bold">{loadingReport ? <Loader2 size={12} className="animate-spin"/> : "ANALYZE"}</button></div>
+          <div className="flex justify-between items-start mb-2"><h3 className="text-blue-300 font-black italic flex items-center gap-2"><Ghost size={16}/> GHOST REPORT</h3>
+            <button onClick={generateGhostReport} disabled={loadingReport || aiCooldown > 0} className="text-xs bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-400 text-white px-3 py-1 rounded-lg font-bold transition-all">
+              {loadingReport ? <Loader2 size={12} className="animate-spin"/> : aiCooldown > 0 ? `RESTING (${aiCooldown}s)` : "ANALYZE"}
+            </button>
+          </div>
           <div className="text-sm text-gray-200 leading-relaxed whitespace-pre-line">{ghostReport || "Tap analyze for insights..."}</div>
        </div>
 
@@ -668,6 +750,9 @@ export default function App() {
   const [showTargetModal, setShowTargetModal] = useState(false); 
   const [showGhostChefModal, setShowGhostChefModal] = useState(false); 
   const [showCardioModal, setShowCardioModal] = useState(false); 
+  
+  // THE NEW AI COOLDOWN SYSTEM
+  const [aiCooldown, setAiCooldown] = useState(0);
 
   const [toastMsg, setToastMsg] = useState(null);
   const [confirmState, setConfirmState] = useState({ isOpen: false, message: '', onConfirm: null });
@@ -694,6 +779,14 @@ export default function App() {
       setShowDailyCheckin(true);
     }
   }, []); 
+
+  // COOLDOWN TIMER TICKER
+  useEffect(() => {
+    if (aiCooldown > 0) {
+      const timer = setTimeout(() => setAiCooldown(c => c - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [aiCooldown]);
 
   const requestConfirm = (msg, action) => {
     setConfirmState({ isOpen: true, message: msg, onConfirm: () => { action(); setConfirmState({ isOpen: false, message: '', onConfirm: null }); } });
@@ -737,7 +830,17 @@ export default function App() {
         <ConfirmModal isOpen={confirmState.isOpen} message={confirmState.message} onConfirm={confirmState.onConfirm} onCancel={() => setConfirmState({isOpen:false, message:'', onConfirm:null})} />
         
         <DailyCheckinModal isOpen={showDailyCheckin} onClose={()=>setShowDailyCheckin(false)} stats={dailyStatsInput} setStats={setDailyStatsInput} onSave={submitDailyLog} date={logDate} setDate={setLogDate}/>
-        <AddMealModal isOpen={showAddMealModal} onClose={()=>setShowAddMealModal(false)} onSave={(m)=>setSavedMeals([...savedMeals, m])} apiKey={YOUR_GEMINI_API_KEY} setToast={setToastMsg}/>
+        
+        <AddMealModal 
+          isOpen={showAddMealModal} 
+          onClose={()=>setShowAddMealModal(false)} 
+          onSave={(m)=>setSavedMeals([...savedMeals, m])} 
+          apiKey={YOUR_GEMINI_API_KEY} 
+          setToast={setToastMsg}
+          aiCooldown={aiCooldown}
+          setAiCooldown={setAiCooldown}
+        />
+        
         <TargetEditorModal 
           isOpen={showTargetModal} 
           onClose={()=>setShowTargetModal(false)} 
@@ -749,7 +852,10 @@ export default function App() {
           currentWeight={dailyStatsInput.weight}
           apiKey={YOUR_GEMINI_API_KEY}
           setToast={setToastMsg}
+          aiCooldown={aiCooldown}
+          setAiCooldown={setAiCooldown}
         />
+        
         <GhostChefModal 
           isOpen={showGhostChefModal}
           onClose={()=>setShowGhostChefModal(false)}
@@ -757,7 +863,10 @@ export default function App() {
           currentTotals={dailyTotals}
           apiKey={YOUR_GEMINI_API_KEY}
           setToast={setToastMsg}
+          aiCooldown={aiCooldown}
+          setAiCooldown={setAiCooldown}
         />
+        
         <CardioModal 
           isOpen={showCardioModal} 
           onClose={() => setShowCardioModal(false)} 
@@ -823,7 +932,7 @@ export default function App() {
           {activeTab === 'stats' && <div className="h-12 flex items-center justify-center"><p className="text-gray-500 text-xs uppercase tracking-widest font-bold">Analytics</p></div>}
         </div>
 
-        <div className="pt-48 pb-32"> {/* FIXED PADDING FOR SCROLLING */}
+        <div className="pt-48 pb-32">
         {activeTab === 'train' && <TrainTab {...{ 
           workoutSplits, setWorkoutSplits, workoutHistory, setWorkoutHistory, workoutEditMode, setWorkoutEditMode, 
           addSplit, deleteSplit, renameSplit, handleSortSplits, dragItem, dragOverItem, phase, dailyStats: dailyStatsInput, 
@@ -837,7 +946,7 @@ export default function App() {
         
         {activeTab === 'stats' && <StatsTab {...{ 
           statsHistory, setLogDate, setShowDailyCheckin, workoutHistory, apiKey: YOUR_GEMINI_API_KEY, setToast: setToastMsg,
-          userTargets: currentTargets, phase 
+          userTargets: currentTargets, phase, aiCooldown, setAiCooldown
         }} />}
         </div>
 
