@@ -9,9 +9,9 @@ import {
 } from 'lucide-react';
 
 // --- CONFIGURATION ---
-const YOUR_GEMINI_API_KEY = "AIzaSyARKWm6hFbhPP0gBF7KBUJMbMMgbdoMJ0Q"; 
+const YOUR_GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || ""; 
 const GEMINI_MODEL = "gemini-2.0-flash"; // UPDATED TO LATEST STABLE MODEL
-const APP_VERSION = "2.5"; 
+const APP_VERSION = "2.6"; 
 
 // --- GLOBAL STYLES ---
 const style = document.createElement('style');

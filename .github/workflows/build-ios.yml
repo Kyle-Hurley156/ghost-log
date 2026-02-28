@@ -19,13 +19,22 @@ jobs:
         with:
           node-version: '20'
 
+      # --- FIX FOR APPLE Xcode/SDK WARNING (ITMS-90725) ---
+      - name: Select latest Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
       - name: Install Dependencies
         run: |
           npm install
           npm install @capacitor/ios
           npx cap add ios
 
+      # --- FIX FOR API KEY LEAK ---
       - name: Build Web Assets
+        env:
+          VITE_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: npm run build
 
       - name: Sync Capacitor
@@ -34,12 +43,8 @@ jobs:
       - name: Configure iOS Settings (Version & Compliance)
         run: |
           cd ios/App/App
-          # Set Short Version to 1.1 (Visible to users)
-          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 1.1" Info.plist
-          # Set Build Version to GitHub Run Number (Unique for Apple internal tracking)
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 1.2" Info.plist
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ github.run_number }}" Info.plist
-          # Set Compliance to False (Removes Yellow Warning in TestFlight)
-          # We try to Add it; if it exists, we Set it.
           /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" Info.plist || /usr/libexec/PlistBuddy -c "Set :ITSAppUsesNonExemptEncryption false" Info.plist
 
       - name: Create ExportOptions.plist
@@ -75,25 +80,20 @@ jobs:
           BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
           KEYCHAIN_PASSWORD: "temporary-password"
         run: |
-          # Variables
           CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
           PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
           KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
 
-          # Import secrets
           echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
           echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o $PP_PATH
 
-          # Create keychain
           security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
           security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
 
-          # Import cert
           security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
           security list-keychain -d user -s $KEYCHAIN_PATH
 
-          # Apply profile
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles/
 
@@ -129,9 +129,6 @@ jobs:
           API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
-          # Decode API Key to file
           mkdir -p ~/.private_keys
           echo -n "$API_KEY_BASE64" > ~/.private_keys/AuthKey_$API_KEY_ID.p8
-          
-          # Upload
           xcrun altool --upload-app --type ios --file $RUNNER_TEMP/output/App.ipa --apiKey "$API_KEY_ID" --apiIssuer "$API_ISSUER_ID"
