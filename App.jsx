@@ -10,8 +10,8 @@ import {
 
 // --- CONFIGURATION ---
 const YOUR_GEMINI_API_KEY = "AIzaSyC8af90GvDo8jlQ83shPwiyIBMd4Pi7bZ4"; 
-const GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025";
-const APP_VERSION = "2.4"; // Bumped for AI Cooldowns
+const GEMINI_MODEL = "gemini-1.5-flash"; // Switched from preview to stable model
+const APP_VERSION = "2.5"; // Bumped version
 
 // --- GLOBAL STYLES ---
 const style = document.createElement('style');
