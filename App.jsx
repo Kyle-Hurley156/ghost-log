@@ -9,9 +9,9 @@ import {
 } from 'lucide-react';
 
 // --- CONFIGURATION ---
-const YOUR_GEMINI_API_KEY = "AIzaSyC8af90GvDo8jlQ83shPwiyIBMd4Pi7bZ4"; 
-const GEMINI_MODEL = "gemini-1.5-flash"; // Switched from preview to stable model
-const APP_VERSION = "2.5"; // Bumped version
+const YOUR_GEMINI_API_KEY = "AIzaSyARKWm6hFbhPP0gBF7KBUJMbMMgbdoMJ0Q"; 
+const GEMINI_MODEL = "gemini-2.0-flash"; // UPDATED TO LATEST STABLE MODEL
+const APP_VERSION = "2.5"; 
 
 // --- GLOBAL STYLES ---
 const style = document.createElement('style');
@@ -218,7 +218,9 @@ const GhostChefModal = ({ isOpen, onClose, targets, currentTotals, apiKey, setTo
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
       const data = await response.json();
       
-      if (!data || !data.candidates || !data.candidates[0]) { throw new Error(data.error?.message || "AI Busy/Error"); }
+      if (!data || !data.candidates || !data.candidates[0]) { 
+        throw new Error(data.error?.message || "AI Busy/Error"); 
+      }
       
       setSuggestion(parseAIResponse(data.candidates[0].content.parts[0].text));
       setAiCooldown(10); // Set 10s cooldown on success
@@ -269,14 +271,14 @@ const TargetEditorModal = ({ isOpen, onClose, activePhase, setActivePhase, targe
       const prompt = `I am a bodybuilder currently ${editingPhase}ing. My weight is ${currentWeight}kg. Recommend Calorie target and Protein range (Min-Max). Rules: 1. Cut: TEE - 500kcal. Protein: 1.8-2.7g/kg. 2. Bulk: TEE + 300kcal. Protein: 1.6-2.2g/kg. 3. Maintain: TEE. Protein: 1.8-2.2g/kg. Ignore carbs/fats. Return JSON only: {"cal": number, "p_min": number, "p_max": number, "explanation": string}`;
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
       const data = await response.json();
-      if (!data || !data.candidates) throw new Error("No response");
+      if (!data || !data.candidates) throw new Error(data.error?.message || "No response");
       const result = parseAIResponse(data.candidates[0].content.parts[0].text);
       setLocalTargets({ ...localTargets, cal: result.cal, p: result.p_max }); 
       setGhostExplanation(result.explanation); setProteinRange(`${result.p_min} - ${result.p_max}g`); 
       setToast("Ghost calculated new targets");
       setAiCooldown(10);
     } catch (e) { 
-      setToast("AI Error"); 
+      setToast("AI Error: " + e.message); 
       setAiCooldown(5);
     }
     setLoading(false);
@@ -370,7 +372,7 @@ const AddMealModal = ({ isOpen, onClose, onSave, apiKey, setToast, aiCooldown, s
       const reader = new FileReader(); 
       reader.onloadend = async () => { 
         try { 
-          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: `Identify food in image. Return JSON per 100g: {"name":string,"cal":number,"p":number,"c":number,"f":number} ONLY JSON` }, { inline_data: { mime_type: "image/jpeg", data: reader.result.split(',')[1] } }] }] }) }); 
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: `Identify food in image. Return JSON per 100g: {"name":string,"cal":number,"p":number,"c":number,"f":number} ONLY JSON` }, { inlineData: { mimeType: "image/jpeg", data: reader.result.split(',')[1] } }] }] }) }); 
           const data = await response.json(); 
           const result = parseAIResponse(data.candidates[0].content.parts[0].text); 
           setSearchQuery(result.name); 
