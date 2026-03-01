@@ -8,19 +8,20 @@ import {
   ChefHat, Timer, HeartPulse, Bike, Lock, Cloud, CloudOff
 } from 'lucide-react';
 
-// --- FIREBASE IMPORTS ---
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, doc, setDoc } from 'firebase/firestore';
-
 // --- CAPACITOR & PREMIUM IMPORTS ---
 import { Capacitor } from '@capacitor/core';
 import { Purchases } from '@revenuecat/purchases-capacitor';
 
+// --- FIREBASE IMPORTS ---
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, doc, setDoc, onSnapshot, collection } from 'firebase/firestore';
+
 // --- CONFIGURATION ---
+// Safely pulls from your hidden .env file locally, or GitHub Secrets in the cloud
 const YOUR_GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || ""; 
 const GEMINI_MODEL = "gemini-2.0-flash"; 
-const APP_VERSION = "3.0"; // Monetization & Cloud Update
+const APP_VERSION = "3.0"; 
 
 const FIREBASE_CONFIG = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
