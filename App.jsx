@@ -6,7 +6,7 @@ import {
   Calendar, Save, Info, Wand2, Camera, Loader2, GripVertical, Settings,
   History, BookOpen, Sparkles, AlertTriangle, ArrowLeft, AlertCircle, Target,
   ChefHat, Timer, HeartPulse, Bike, Lock, Cloud, CloudOff
-} from 'lucide-react';
+} from 'lucide-react';  
 
 // --- CAPACITOR & PREMIUM IMPORTS (PRODUCTION) ---
 import { Capacitor } from '@capacitor/core';
