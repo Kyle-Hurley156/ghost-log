@@ -8,17 +8,16 @@ import {
   ChefHat, Timer, HeartPulse, Bike, Lock, Cloud, CloudOff
 } from 'lucide-react';
 
-// --- CAPACITOR & PREMIUM IMPORTS ---
+// --- CAPACITOR & PREMIUM IMPORTS (PRODUCTION) ---
 import { Capacitor } from '@capacitor/core';
 import { Purchases } from '@revenuecat/purchases-capacitor';
 
-// --- FIREBASE IMPORTS ---
+// --- FIREBASE IMPORTS (PRODUCTION) ---
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, doc, setDoc, onSnapshot, collection } from 'firebase/firestore';
+import { getFirestore, doc, setDoc } from 'firebase/firestore';
 
-// --- CONFIGURATION ---
-// Safely pulls from your hidden .env file locally, or GitHub Secrets in the cloud
+// --- CONFIGURATION (PRODUCTION) ---
 const YOUR_GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || ""; 
 const GEMINI_MODEL = "gemini-2.0-flash"; 
 const APP_VERSION = "3.0"; 
@@ -39,7 +38,6 @@ style.innerHTML = `
   input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
   input[type=number] { -moz-appearance: textfield; }
   .no-select { user-select: none; -webkit-user-select: none; }
-  /* Hide scrollbar */
   ::-webkit-scrollbar { display: none; }
   body { -ms-overflow-style: none; scrollbar-width: none; background-color: #000; }
 `;
