@@ -15,7 +15,7 @@ import { Purchases } from '@revenuecat/purchases-capacitor';
 // --- FIREBASE IMPORTS (PRODUCTION) ---
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, doc, setDoc } from 'firebase/firestore';
+import { getFirestore, doc, setDoc } from 'firebase/firestore'; 
 
 // --- CONFIGURATION (PRODUCTION) ---
 const YOUR_GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || ""; 
