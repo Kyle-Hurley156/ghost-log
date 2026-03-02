@@ -20,7 +20,7 @@ import { getFirestore, doc, setDoc } from 'firebase/firestore';
 // --- CONFIGURATION (PRODUCTION) ---
 const YOUR_GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || ""; 
 const GEMINI_MODEL = "gemini-2.0-flash"; 
-const APP_VERSION = "3.0"; 
+const APP_VERSION = "3.0";  
 
 const FIREBASE_CONFIG = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
