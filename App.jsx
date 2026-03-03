@@ -18,8 +18,6 @@ import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc } from 'firebase/firestore'; 
 
 // --- CONFIGURATION (PRODUCTION) ---
-const YOUR_GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || ""; 
-const GEMINI_MODEL = "gemini-2.0-flash"; 
 const APP_VERSION = "3.0";  
 
 const FIREBASE_CONFIG = {
@@ -689,9 +687,18 @@ const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workoutHistor
       DATA: ${JSON.stringify({ logs: statsHistory.slice(-7), workouts: workoutHistory.slice(-5), targets: userTargets })}.
       Output exactly 3 bullet points: 1. Observation on adherence/trends. 2. Critique of training/recovery/cardio balance. 3. Actionable advice for next week. Keep under 100 words total.`;
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-      });
+      // SECURE VERCEL PROXY CALL
+const response = await fetch('[https://ghost-log.vercel.app/api/ghost](https://ghost-log.vercel.app/api/ghost)', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    prompt: prompt, // (Or whatever your prompt variable is named)
+    isImage: true,  // (Set to false if this is a text-only request)
+    imageData: base64Image // (Make sure this is your base64 variable without the data:image/jpeg prefix)
+  })
+});
       const data = await response.json();
       if (!data || !data.candidates || !data.candidates[0]) throw new Error(data.error?.message || "No AI response");
       setGhostReport(data.candidates[0].content.parts[0].text);
