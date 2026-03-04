@@ -8,16 +8,32 @@ import {
   ChefHat, Timer, HeartPulse, Bike, Lock, Cloud, CloudOff, Apple
 } from 'lucide-react';
 
-// --- PRODUCTION IMPORTS ---
+// ⚠️ PRODUCTION NATIVE IMPORTS
+// UNCOMMENT THESE TWO LINES WHEN YOU PASTE INTO VS CODE!
 import { Capacitor } from '@capacitor/core';
 import { Purchases } from '@revenuecat/purchases-capacitor';
+
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, linkWithPopup, OAuthProvider } from 'firebase/auth';
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
 
+// --- FALLBACKS FOR WEB PREVIEW (These are overridden if you uncomment the imports above) ---
+const CapacitorFallback = typeof Capacitor !== 'undefined' ? Capacitor : {
+  isNativePlatform: () => false,
+  getPlatform: () => 'web'
+};
+
+const PurchasesFallback = typeof Purchases !== 'undefined' ? Purchases : {
+  configure: () => {},
+  getCustomerInfo: async () => ({ entitlements: { active: {} } }),
+  getOfferings: async () => ({ current: null }),
+  purchasePackage: async () => ({ customerInfo: { entitlements: { active: {} } } })
+};
+
 // --- CONFIGURATION ---
 const APP_VERSION = "3.1"; 
 
+// Using optional chaining to prevent environment crashes
 const FIREBASE_CONFIG = {
   apiKey: import.meta.env?.VITE_FIREBASE_API_KEY || "",
   authDomain: import.meta.env?.VITE_FIREBASE_AUTH_DOMAIN || "",
@@ -104,7 +120,6 @@ const calculateSetTarget = (lastWeight, lastReps, phase, readiness) => {
   } else if (phase === 'CUT') { 
     if (lastReps >= 12) targetWeight += 2.5; 
   } else {
-    // MAINTAIN
     if (lastReps >= 12) targetWeight += 2.5; 
   }
 
@@ -157,7 +172,6 @@ const INITIAL_SPLITS = [
   { id: 'split-2', name: 'Pull B', exercises: [{ id: 1, name: 'Pullups', defaultSets: 3 }, { id: 2, name: 'DB Row', defaultSets: 3 }] },
   { id: 'split-3', name: 'Legs A', exercises: [{ id: 1, name: 'Squat', defaultSets: 3 }, { id: 2, name: 'RDL', defaultSets: 3 }] }
 ];
-const INITIAL_MEALS = [];
 const INITIAL_TARGETS = { CUT: { cal: 2200, p: 200, c: 0, f: 0 }, BULK: { cal: 3100, p: 220, c: 0, f: 0 }, MAINTAIN: { cal: 2600, p: 200, c: 0, f: 0 } };
 
 // --- SUB COMPONENTS ---
@@ -241,9 +255,11 @@ const CardioModal = ({ isOpen, onClose, onSave }) => {
   const [calories, setCalories] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const filteredCardio = useMemo(() => !searchTerm ? CARDIO_DATABASE : CARDIO_DATABASE.filter(c => c.toLowerCase().includes(searchTerm.toLowerCase())), [searchTerm]);
-  const handleSelect = (type) => { setSelectedType(type); setSearchTerm(type); setShowSuggestions(false); };
+  
   if (!isOpen) return null;
+  const handleSelect = (type) => { setSelectedType(type); setSearchTerm(type); setShowSuggestions(false); };
   const handleSave = () => { if (!duration || !calories || !selectedType) return; onSave({ type: 'Cardio', name: selectedType, duration: parseFloat(duration), calories: parseFloat(calories) }); setDuration(''); setCalories(''); setSearchTerm(''); setSelectedType(''); onClose(); };
+  
   return (
     <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 animate-in fade-in">
       <div className="bg-gray-800 w-full max-w-xs rounded-2xl p-6 border border-gray-700 shadow-2xl">
@@ -260,7 +276,6 @@ const CardioModal = ({ isOpen, onClose, onSave }) => {
   );
 };
 
-// 🛡️ SECURE VERCEL PROXY CALLS 🛡️
 const GhostChefModal = ({ isOpen, onClose, targets, currentTotals, setToast, aiCooldown, setAiCooldown }) => {
   const [loading, setLoading] = useState(false);
   const [suggestion, setSuggestion] = useState(null);
@@ -285,13 +300,12 @@ const GhostChefModal = ({ isOpen, onClose, targets, currentTotals, setToast, aiC
         body: JSON.stringify({ prompt: prompt, isImage: false, imageData: null }) 
       });
       const data = await response.json();
-      
-      if (!response.ok || !data.candidates || !data.candidates[0]) { throw new Error(data.error || "AI Busy/Error"); }
+      if (!response.ok || !data.candidates) throw new Error(data.error || "AI Busy");
       
       setSuggestion(parseAIResponse(data.candidates[0].content.parts[0].text));
       setAiCooldown(10); 
     } catch (e) { 
-      setToast("AI Error: " + e.message); 
+      setToast("AI Error"); 
       setAiCooldown(5); 
     }
     setLoading(false);
@@ -833,13 +847,13 @@ export default function App() {
   useEffect(() => {
     // 1. Initialize RevenueCat
     const setupRevenueCat = async () => {
-      if (Capacitor.isNativePlatform()) {
+      if (CapacitorFallback.isNativePlatform()) {
         try {
-          const platform = Capacitor.getPlatform();
+          const platform = CapacitorFallback.getPlatform();
           const rcKey = platform === 'ios' ? import.meta.env?.VITE_RC_APPLE_KEY : import.meta.env?.VITE_RC_GOOGLE_KEY;
           if (rcKey) {
-            await Purchases.configure({ apiKey: rcKey });
-            const info = await Purchases.getCustomerInfo();
+            await PurchasesFallback.configure({ apiKey: rcKey });
+            const info = await PurchasesFallback.getCustomerInfo();
             if (typeof info.entitlements.active['pro'] !== "undefined") setIsPro(true);
           }
         } catch (e) { console.error("RevenueCat Init Error", e); }
@@ -916,8 +930,7 @@ export default function App() {
 
   const handleSubscribeClick = async () => {
     setIsPaywallLoading(true);
-    if (!Capacitor.isNativePlatform()) {
-      // WEB BYPASS (For testing on laptop)
+    if (!CapacitorFallback.isNativePlatform()) {
       setTimeout(() => {
         setIsPro(true);
         setShowPaywall(false);
@@ -928,10 +941,9 @@ export default function App() {
     }
 
     try {
-      // REAL REVENUECAT PURCHASE FLOW
-      const offerings = await Purchases.getOfferings();
+      const offerings = await PurchasesFallback.getOfferings();
       if (offerings.current !== null && offerings.current.availablePackages.length !== 0) {
-        const { customerInfo } = await Purchases.purchasePackage({ aPackage: offerings.current.monthly });
+        const { customerInfo } = await PurchasesFallback.purchasePackage({ aPackage: offerings.current.monthly });
         if (typeof customerInfo.entitlements.active['pro'] !== "undefined") {
           setIsPro(true);
           setShowPaywall(false);
