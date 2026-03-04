@@ -19,12 +19,12 @@ import { getFirestore, doc, setDoc } from 'firebase/firestore';
 const APP_VERSION = "3.1"; 
 
 const FIREBASE_CONFIG = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
+  apiKey: import.meta.env?.VITE_FIREBASE_API_KEY || "",
+  authDomain: import.meta.env?.VITE_FIREBASE_AUTH_DOMAIN || "",
+  projectId: import.meta.env?.VITE_FIREBASE_PROJECT_ID || "",
+  storageBucket: import.meta.env?.VITE_FIREBASE_STORAGE_BUCKET || "",
+  messagingSenderId: import.meta.env?.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
+  appId: import.meta.env?.VITE_FIREBASE_APP_ID || ""
 };
 
 // --- GLOBAL STYLES ---
@@ -836,7 +836,7 @@ export default function App() {
       if (Capacitor.isNativePlatform()) {
         try {
           const platform = Capacitor.getPlatform();
-          const rcKey = platform === 'ios' ? import.meta.env.VITE_RC_APPLE_KEY : import.meta.env.VITE_RC_GOOGLE_KEY;
+          const rcKey = platform === 'ios' ? import.meta.env?.VITE_RC_APPLE_KEY : import.meta.env?.VITE_RC_GOOGLE_KEY;
           if (rcKey) {
             await Purchases.configure({ apiKey: rcKey });
             const info = await Purchases.getCustomerInfo();
@@ -875,7 +875,7 @@ export default function App() {
       setCloudStatus('syncing');
       try {
         const db = getFirestore();
-        const appId = import.meta.env.VITE_FIREBASE_APP_ID || 'ghostlog-local';
+        const appId = import.meta.env?.VITE_FIREBASE_APP_ID || 'ghostlog-local';
         
         const userRef = doc(db, 'artifacts', appId, 'users', cloudUser.uid, 'userData', 'backup');
         
