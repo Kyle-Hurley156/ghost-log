@@ -1,0 +1,20 @@
+Terms of Service for GhostLog
+Effective Date: March 4, 2026
+
+1. Acceptance of Terms
+By downloading and using GhostLog, you agree to these Terms of Service.
+
+2. Medical Disclaimer
+GhostLog is a fitness tracking tool, not a medical device or a certified personal trainer. The AI-generated meal plans and workout targets are suggestions based on standard fitness algorithms. Always consult a physician before beginning any diet or exercise program. You assume all risks associated with your workouts.
+
+3. GhostLog Pro Subscriptions
+GhostLog offers a premium subscription ("GhostLog Pro") that unlocks advanced AI features.
+- Subscriptions automatically renew unless auto-renew is turned off at least 24 hours before the end of the current period.
+- Your account will be charged for renewal within 24 hours prior to the end of the current period.
+- You can manage your subscriptions and turn off auto-renewal by going to your Account Settings on the App Store after purchase.
+
+4. Prohibited Conduct
+You agree not to reverse engineer the app, attempt to bypass the paywall, or use the AI features to generate illegal or harmful content.
+
+5. Limitation of Liability
+The developer of GhostLog is not liable for any injuries, damages, or losses resulting from the use of the app.
