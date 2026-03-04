@@ -8,34 +8,23 @@ import {
   ChefHat, Timer, HeartPulse, Bike, Lock, Cloud, CloudOff, Apple
 } from 'lucide-react';
 
-// --- FIREBASE IMPORTS ---
+// --- PRODUCTION IMPORTS ---
+import { Capacitor } from '@capacitor/core';
+import { Purchases } from '@revenuecat/purchases-capacitor';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, linkWithPopup, OAuthProvider } from 'firebase/auth';
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
-
-// --- MOCK CAPACITOR & REVENUECAT FOR BROWSER ---
-const Capacitor = {
-  isNativePlatform: () => false,
-  getPlatform: () => 'web'
-};
-
-const Purchases = {
-  configure: () => {},
-  getCustomerInfo: async () => ({ entitlements: { active: {} } }),
-  getOfferings: async () => ({ current: null }),
-  purchasePackage: async () => ({ customerInfo: { entitlements: { active: {} } } })
-};
 
 // --- CONFIGURATION ---
 const APP_VERSION = "3.1"; 
 
 const FIREBASE_CONFIG = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || ""
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
 // --- GLOBAL STYLES ---
@@ -115,6 +104,7 @@ const calculateSetTarget = (lastWeight, lastReps, phase, readiness) => {
   } else if (phase === 'CUT') { 
     if (lastReps >= 12) targetWeight += 2.5; 
   } else {
+    // MAINTAIN
     if (lastReps >= 12) targetWeight += 2.5; 
   }
 
@@ -167,6 +157,7 @@ const INITIAL_SPLITS = [
   { id: 'split-2', name: 'Pull B', exercises: [{ id: 1, name: 'Pullups', defaultSets: 3 }, { id: 2, name: 'DB Row', defaultSets: 3 }] },
   { id: 'split-3', name: 'Legs A', exercises: [{ id: 1, name: 'Squat', defaultSets: 3 }, { id: 2, name: 'RDL', defaultSets: 3 }] }
 ];
+const INITIAL_MEALS = [];
 const INITIAL_TARGETS = { CUT: { cal: 2200, p: 200, c: 0, f: 0 }, BULK: { cal: 3100, p: 220, c: 0, f: 0 }, MAINTAIN: { cal: 2600, p: 200, c: 0, f: 0 } };
 
 // --- SUB COMPONENTS ---
@@ -250,11 +241,9 @@ const CardioModal = ({ isOpen, onClose, onSave }) => {
   const [calories, setCalories] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const filteredCardio = useMemo(() => !searchTerm ? CARDIO_DATABASE : CARDIO_DATABASE.filter(c => c.toLowerCase().includes(searchTerm.toLowerCase())), [searchTerm]);
-  
-  if (!isOpen) return null;
   const handleSelect = (type) => { setSelectedType(type); setSearchTerm(type); setShowSuggestions(false); };
+  if (!isOpen) return null;
   const handleSave = () => { if (!duration || !calories || !selectedType) return; onSave({ type: 'Cardio', name: selectedType, duration: parseFloat(duration), calories: parseFloat(calories) }); setDuration(''); setCalories(''); setSearchTerm(''); setSelectedType(''); onClose(); };
-  
   return (
     <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 animate-in fade-in">
       <div className="bg-gray-800 w-full max-w-xs rounded-2xl p-6 border border-gray-700 shadow-2xl">
@@ -271,7 +260,7 @@ const CardioModal = ({ isOpen, onClose, onSave }) => {
   );
 };
 
-// 🛡️ ALL AI CALLS ROUTED THROUGH VERCEL PROXY 🛡️
+// 🛡️ SECURE VERCEL PROXY CALLS 🛡️
 const GhostChefModal = ({ isOpen, onClose, targets, currentTotals, setToast, aiCooldown, setAiCooldown }) => {
   const [loading, setLoading] = useState(false);
   const [suggestion, setSuggestion] = useState(null);
@@ -292,13 +281,12 @@ const GhostChefModal = ({ isOpen, onClose, targets, currentTotals, setToast, aiC
       const prompt = `I need a high-protein meal or snack idea. Target: approx ${reqCals} calories and ${reqProt}g protein. Constraints: ${carbLimit} ${fatLimit}. Style: Fancy/Gourmet but simple. Return JSON only: {"mealName": "Name", "ingredients": ["List with amounts"], "macros": {"cal": number, "p": number, "c": number, "f": number}, "reason": "Why fits"}`;
       
       const response = await fetch('https://ghost-log.vercel.app/api/ghost', { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ prompt: prompt, isImage: false, imageData: null }) 
       });
-      
       const data = await response.json();
-      if (!response.ok || !data.candidates) throw new Error("AI Busy/Error");
+      
+      if (!response.ok || !data.candidates || !data.candidates[0]) { throw new Error(data.error || "AI Busy/Error"); }
       
       setSuggestion(parseAIResponse(data.candidates[0].content.parts[0].text));
       setAiCooldown(10); 
@@ -349,11 +337,9 @@ const TargetEditorModal = ({ isOpen, onClose, activePhase, setActivePhase, targe
       const prompt = `I am a bodybuilder currently ${editingPhase}ing. My weight is ${currentWeight}kg. Recommend Calorie target and Protein range (Min-Max). Rules: 1. Cut: TEE - 500kcal. Protein: 1.8-2.7g/kg. 2. Bulk: TEE + 300kcal. Protein: 1.6-2.2g/kg. 3. Maintain: TEE. Protein: 1.8-2.2g/kg. Ignore carbs/fats. Return JSON only: {"cal": number, "p_min": number, "p_max": number, "explanation": string}`;
       
       const response = await fetch('https://ghost-log.vercel.app/api/ghost', { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ prompt: prompt, isImage: false, imageData: null }) 
       });
-      
       const data = await response.json();
       if (!response.ok || !data.candidates) throw new Error("No response");
       
@@ -395,6 +381,32 @@ const TargetEditorModal = ({ isOpen, onClose, activePhase, setActivePhase, targe
   );
 };
 
+const GhostAiPanel = ({ show, onClose }) => (
+  <div className={`fixed inset-y-0 right-0 w-80 bg-gray-900 border-l border-gray-800 shadow-2xl z-[100] transform transition-transform duration-300 ${show ? 'translate-x-0' : 'translate-x-full'}`}>
+     {show && <div className="absolute inset-0 -left-[100vw] bg-black/50" onClick={onClose}></div>}
+     <div className="p-4 h-full flex flex-col relative z-10 bg-gray-900">
+      <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-black italic text-blue-400 flex items-center gap-2"><Ghost size={24}/> GHOST AI</h2><button onClick={onClose}><X size={32} className="text-gray-500 hover:text-white"/></button></div>
+      <div className="flex-1 overflow-y-auto space-y-4">
+        <div className="bg-gray-800 p-3 rounded-lg border border-gray-700"><h4 className="text-white font-bold text-sm mb-2">How to use GhostLog</h4><ul className="text-xs text-gray-400 space-y-2 list-disc pl-4"><li><strong>Targets:</strong> Click the "CUT/BULK" button in the header to set your calorie goals. Use the "Wand" to auto-calculate.</li><li><strong>Ghost Chef:</strong> In the EAT tab, ask Ghost to invent a meal based on your remaining macros.</li><li><strong>Cardio:</strong> Use the "Cardio +" button in the TRAIN tab to log runs, rides, etc.</li><li><strong>Ghost Report:</strong> In the STATS tab, click "Analyze" to get a weekly critique of your progress.</li></ul></div>
+        <div className="bg-gray-800 p-3 rounded-lg border border-gray-700"><p className="text-sm text-gray-300"><span className="text-blue-300 font-bold">Status:</span> Ghost is watching.</p></div>
+      </div>
+    </div>
+  </div>
+);
+
+const ExerciseSearchInput = ({ onAdd }) => {
+  const [exerciseSearch, setExerciseSearch] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const filteredExercises = useMemo(() => !exerciseSearch ? [] : EXERCISE_DATABASE.filter(ex => ex.toLowerCase().includes(exerciseSearch.toLowerCase())), [exerciseSearch]);
+  return (
+    <div className="mt-6 bg-gray-900 border border-dashed border-gray-700 rounded-xl p-4 relative">
+      <p className="text-xs text-gray-500 font-bold uppercase mb-2">Add Exercise</p>
+      <div className="flex gap-2"><input type="text" placeholder="Search Exercise..." className="flex-1 bg-gray-800 text-white p-3 rounded-lg text-sm border border-gray-600 focus:border-blue-500 outline-none" value={exerciseSearch} onChange={e => { setExerciseSearch(e.target.value); setShowSuggestions(true); }} onFocus={() => setShowSuggestions(true)} onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} onKeyDown={e => { if(e.key==='Enter'){ onAdd(e.target.value); setExerciseSearch(''); } }} /><button className="bg-gray-800 p-3 rounded-lg text-gray-400 border border-gray-600"><BookOpen size={20}/></button></div>
+      {showSuggestions && (exerciseSearch || filteredExercises.length > 0) && (<div className="absolute left-0 right-0 mt-2 bg-gray-800 border border-gray-700 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto mx-4">{filteredExercises.length > 0 ? filteredExercises.map((n, i) => <div key={i} className="p-3 hover:bg-blue-600/20 text-sm text-gray-300 border-b border-gray-700 last:border-0" onClick={() => { onAdd(n); setExerciseSearch(''); }}>{n}</div>) : <div className="p-3 text-sm text-gray-400 hover:bg-green-600/20" onClick={() => { onAdd(exerciseSearch); setExerciseSearch(''); }}>+ Create "{exerciseSearch}"</div>}</div>)}
+    </div>
+  );
+};
+
 const AddMealModal = ({ isOpen, onClose, onSave, setToast, aiCooldown, setAiCooldown }) => {
   const [mealName, setMealName] = useState('');
   const [ingredients, setIngredients] = useState([]);
@@ -411,15 +423,12 @@ const AddMealModal = ({ isOpen, onClose, onSave, setToast, aiCooldown, setAiCool
     if(aiCooldown > 0) { setToast(`Ghost is resting for ${aiCooldown}s`); return; }
     setLoading(true); 
     try { 
-      const prompt = `Identify food "${searchQuery}". Return JSON per 100g: {"name":string,"cal":number,"p":number,"c":number,"f":number} ONLY JSON`;
       const response = await fetch('https://ghost-log.vercel.app/api/ghost', { 
         method: 'POST', headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ prompt: prompt, isImage: false, imageData: null }) 
+        body: JSON.stringify({ prompt: `Identify food "${searchQuery}". Return JSON per 100g: {"name":string,"cal":number,"p":number,"c":number,"f":number} ONLY JSON`, isImage: false, imageData: null }) 
       }); 
-      
       const data = await response.json(); 
       if (!response.ok || !data.candidates) throw new Error("Search Failed");
-      
       const result = parseAIResponse(data.candidates[0].content.parts[0].text); 
       setCurrentFood({ name: result.name, cal: result.cal, p: result.p, c: result.c, f: result.f }); 
       setAiCooldown(5); 
@@ -438,17 +447,12 @@ const AddMealModal = ({ isOpen, onClose, onSave, setToast, aiCooldown, setAiCool
       const reader = new FileReader(); 
       reader.onloadend = async () => { 
         try { 
-          const base64Data = reader.result.split(',')[1];
-          const prompt = `Identify food in image. Return JSON per 100g: {"name":string,"cal":number,"p":number,"c":number,"f":number} ONLY JSON`;
-          
           const response = await fetch('https://ghost-log.vercel.app/api/ghost', { 
             method: 'POST', headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify({ prompt: prompt, isImage: true, imageData: base64Data }) 
+            body: JSON.stringify({ prompt: `Identify food in image. Return JSON per 100g: {"name":string,"cal":number,"p":number,"c":number,"f":number} ONLY JSON`, isImage: true, imageData: reader.result.split(',')[1] }) 
           }); 
-          
           const data = await response.json(); 
           if (!response.ok || !data.candidates) throw new Error("Scan Failed");
-          
           const result = parseAIResponse(data.candidates[0].content.parts[0].text); 
           setSearchQuery(result.name); 
           setCurrentFood({ name: result.name, cal: result.cal, p: result.p, c: result.c, f: result.f }); 
@@ -512,35 +516,12 @@ const DailyCheckinModal = ({ isOpen, onClose, stats, setStats, onSave, date, set
   );
 };
 
-const GhostAiPanel = ({ show, onClose }) => (
-  <div className={`fixed inset-y-0 right-0 w-80 bg-gray-900 border-l border-gray-800 shadow-2xl z-[100] transform transition-transform duration-300 ${show ? 'translate-x-0' : 'translate-x-full'}`}>
-     {show && <div className="absolute inset-0 -left-[100vw] bg-black/50" onClick={onClose}></div>}
-     <div className="p-4 h-full flex flex-col relative z-10 bg-gray-900">
-      <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-black italic text-blue-400 flex items-center gap-2"><Ghost size={24}/> GHOST AI</h2><button onClick={onClose}><X size={32} className="text-gray-500 hover:text-white"/></button></div>
-      <div className="flex-1 overflow-y-auto space-y-4">
-        <div className="bg-gray-800 p-3 rounded-lg border border-gray-700"><h4 className="text-white font-bold text-sm mb-2">How to use GhostLog</h4><ul className="text-xs text-gray-400 space-y-2 list-disc pl-4"><li><strong>Targets:</strong> Click the "CUT/BULK" button in the header to set your calorie goals. Use the "Wand" to auto-calculate.</li><li><strong>Ghost Chef:</strong> In the EAT tab, ask Ghost to invent a meal based on your remaining macros.</li><li><strong>Cardio:</strong> Use the "Cardio +" button in the TRAIN tab to log runs, rides, etc.</li><li><strong>Ghost Report:</strong> In the STATS tab, click "Analyze" to get a weekly critique of your progress.</li></ul></div>
-        <div className="bg-gray-800 p-3 rounded-lg border border-gray-700"><p className="text-sm text-gray-300"><span className="text-blue-300 font-bold">Status:</span> Ghost is watching.</p></div>
-      </div>
-    </div>
-  </div>
-);
-
-const ExerciseSearchInput = ({ onAdd }) => {
-  const [exerciseSearch, setExerciseSearch] = useState('');
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const filteredExercises = useMemo(() => !exerciseSearch ? [] : EXERCISE_DATABASE.filter(ex => ex.toLowerCase().includes(exerciseSearch.toLowerCase())), [exerciseSearch]);
-  return (
-    <div className="mt-6 bg-gray-900 border border-dashed border-gray-700 rounded-xl p-4 relative">
-      <p className="text-xs text-gray-500 font-bold uppercase mb-2">Add Exercise</p>
-      <div className="flex gap-2"><input type="text" placeholder="Search Exercise..." className="flex-1 bg-gray-800 text-white p-3 rounded-lg text-sm border border-gray-600 focus:border-blue-500 outline-none" value={exerciseSearch} onChange={e => { setExerciseSearch(e.target.value); setShowSuggestions(true); }} onFocus={() => setShowSuggestions(true)} onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} onKeyDown={e => { if(e.key==='Enter'){ onAdd(e.target.value); setExerciseSearch(''); } }} /><button className="bg-gray-800 p-3 rounded-lg text-gray-400 border border-gray-600"><BookOpen size={20}/></button></div>
-      {showSuggestions && (exerciseSearch || filteredExercises.length > 0) && (<div className="absolute left-0 right-0 mt-2 bg-gray-800 border border-gray-700 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto mx-4">{filteredExercises.length > 0 ? filteredExercises.map((n, i) => <div key={i} className="p-3 hover:bg-blue-600/20 text-sm text-gray-300 border-b border-gray-700 last:border-0" onClick={() => { onAdd(n); setExerciseSearch(''); }}>{n}</div>) : <div className="p-3 text-sm text-gray-400 hover:bg-green-600/20" onClick={() => { onAdd(exerciseSearch); setExerciseSearch(''); }}>+ Create "{exerciseSearch}"</div>}</div>)}
-    </div>
-  );
-};
-
-// --- TABS ---
-
-const TrainTab = ({ workoutSplits, setWorkoutSplits, workoutHistory, setWorkoutHistory, workoutEditMode, setWorkoutEditMode, addSplit, deleteSplit, renameSplit, handleSortSplits, dragItem, dragOverItem, phase, dailyStats, requestConfirm, setShowCardioModal }) => {
+// --- TRAIN TAB ---
+const TrainTab = ({ 
+  workoutSplits, setWorkoutSplits, workoutHistory, setWorkoutHistory, 
+  workoutEditMode, setWorkoutEditMode, addSplit, deleteSplit, renameSplit, handleSortSplits, 
+  dragItem, dragOverItem, phase, dailyStats, requestConfirm, setShowCardioModal
+}) => {
   const [mode, setMode] = useState('SPLIT_SELECT');
   const [activeSession, setActiveSession] = useState(null);
   const [editingSplit, setEditingSplit] = useState(null);
@@ -673,6 +654,7 @@ const TrainTab = ({ workoutSplits, setWorkoutSplits, workoutHistory, setWorkoutH
   );
 };
 
+// --- EAT TAB ---
 const EatTab = ({ savedMeals, dailyLog, mealEditMode, setMealEditMode, setShowAddMealModal, setShowGhostChefModal, logMeal, deleteSavedMeal, deleteLogItem, getMealMacros, dragItem, dragOverItem, handleSortMeals, requestConfirm, userTargets, dailyStats, isPro, handlePremiumFeature }) => {
   return (
     <div className="animate-in fade-in">
@@ -692,6 +674,7 @@ const EatTab = ({ savedMeals, dailyLog, mealEditMode, setMealEditMode, setShowAd
   );
 };
 
+// --- STATS TAB ---
 const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workoutHistory, setToast, userTargets, phase, aiCooldown, setAiCooldown, isPro, handlePremiumFeature }) => {
   const [localStat, setLocalStat] = useState('weight');
   const [timeRange, setTimeRange] = useState('1W');
@@ -717,13 +700,12 @@ const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workoutHistor
       DATA: ${JSON.stringify({ logs: statsHistory.slice(-7), workouts: workoutHistory.slice(-5), targets: userTargets })}.
       Output exactly 3 bullet points: 1. Observation on adherence/trends. 2. Critique of training/recovery/cardio balance. 3. Actionable advice for next week. Keep under 100 words total.`;
 
-      const response = await fetch('https://ghost-log.vercel.app/api/ghost', { 
+      const response = await fetch('https://ghost-log.vercel.app/api/ghost', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ prompt: prompt, isImage: false, imageData: null }) 
-      }); 
-      
+        body: JSON.stringify({ prompt: prompt, isImage: false, imageData: null })
+      });
       const data = await response.json();
-      if (!response.ok || !data.candidates) throw new Error("AI response failed");
+      if (!response.ok || !data.candidates || !data.candidates[0]) throw new Error(data.error?.message || "No AI response");
       
       setGhostReport(data.candidates[0].content.parts[0].text);
       setAiCooldown(10);
@@ -812,8 +794,6 @@ const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workoutHistor
   );
 };
 
-// --- MAIN APP ENTRY ---
-
 export default function App() {
   const [activeTab, setActiveTab] = useState('train');
   const [phase, setPhase] = useStickyState('CUT', 'ghost_phase'); 
@@ -851,6 +831,7 @@ export default function App() {
 
   // --- INITIALIZATION (FIREBASE & REVENUECAT) ---
   useEffect(() => {
+    // 1. Initialize RevenueCat
     const setupRevenueCat = async () => {
       if (Capacitor.isNativePlatform()) {
         try {
@@ -866,6 +847,7 @@ export default function App() {
     };
     setupRevenueCat();
 
+    // 2. Initialize Firebase Anonymous Auth
     if (FIREBASE_CONFIG.apiKey) {
       try {
         const app = initializeApp(FIREBASE_CONFIG);
@@ -893,12 +875,17 @@ export default function App() {
       setCloudStatus('syncing');
       try {
         const db = getFirestore();
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'ghostlog-local';
+        const appId = import.meta.env.VITE_FIREBASE_APP_ID || 'ghostlog-local';
+        
         const userRef = doc(db, 'artifacts', appId, 'users', cloudUser.uid, 'userData', 'backup');
         
         await setDoc(userRef, {
           updatedAt: new Date().toISOString(),
-          workoutSplits, savedMeals, statsHistory, userTargets, phase
+          workoutSplits,
+          savedMeals,
+          statsHistory,
+          userTargets,
+          phase
         }, { merge: true });
         
         setCloudStatus('synced');
@@ -930,23 +917,36 @@ export default function App() {
   const handleSubscribeClick = async () => {
     setIsPaywallLoading(true);
     if (!Capacitor.isNativePlatform()) {
-      setTimeout(() => { setIsPro(true); setShowPaywall(false); setIsPaywallLoading(false); setToastMsg("Welcome to Pro! (Web Bypass)"); }, 1500);
+      // WEB BYPASS (For testing on laptop)
+      setTimeout(() => {
+        setIsPro(true);
+        setShowPaywall(false);
+        setIsPaywallLoading(false);
+        setToastMsg("Welcome to Pro! (Web Bypass)");
+      }, 1500);
       return;
     }
+
     try {
+      // REAL REVENUECAT PURCHASE FLOW
       const offerings = await Purchases.getOfferings();
       if (offerings.current !== null && offerings.current.availablePackages.length !== 0) {
         const { customerInfo } = await Purchases.purchasePackage({ aPackage: offerings.current.monthly });
         if (typeof customerInfo.entitlements.active['pro'] !== "undefined") {
-          setIsPro(true); setShowPaywall(false); setToastMsg("Welcome to GhostLog Pro!");
+          setIsPro(true);
+          setShowPaywall(false);
+          setToastMsg("Welcome to GhostLog Pro!");
         }
-      } else { setToastMsg("No packages configured in RevenueCat yet."); }
+      } else {
+        setToastMsg("No packages configured in RevenueCat yet.");
+      }
     } catch (e) {
       if (!e.userCancelled) setToastMsg("Purchase failed. Try again.");
     }
     setIsPaywallLoading(false);
   };
 
+  // Cooldown & Startup Modals
   useEffect(() => { if (aiCooldown > 0) { const timer = setTimeout(() => setAiCooldown(c => c - 1), 1000); return () => clearTimeout(timer); } }, [aiCooldown]);
   useEffect(() => { const today = getLocalDate(); if (!statsHistory.some(entry => entry.date === today)) { setLogDate(today); setShowDailyCheckin(true); } }, []); 
 
