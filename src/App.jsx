@@ -260,7 +260,7 @@ export default function App() {
            setToastMsg("Cardio Logged");
         }} />
 
-        <GhostAiPanel show={showGhostPanel} onClose={()=>setShowGhostPanel(false)} accentColor={accentColor}/>
+        <GhostAiPanel show={showGhostPanel} onClose={()=>setShowGhostPanel(false)}/>
 
         {/* Floating Ghost AI Button */}
         {!showGhostPanel && !showDailyCheckin && !showAddMealModal && !showTargetModal && !showGhostChefModal && !showCardioModal && !showPaywall && (

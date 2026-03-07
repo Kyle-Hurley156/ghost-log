@@ -45,5 +45,7 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>GhostLog uses the camera to scan barcodes and identify food for macro tracking.</string>
 </dict>
 </plist>
