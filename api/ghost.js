@@ -41,7 +41,7 @@ export default async function handler(req, res) {
     }
 
     // 4. Securely fetch from Google's servers
-    const model = isImage ? 'gemini-2.0-flash' : 'gemini-2.0-flash';
+    const model = 'gemini-2.5-flash';
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

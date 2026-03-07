@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Search, Camera, Loader2, Trash2, Scan, ChevronRight, Sparkles } from 'lucide-react';
+import { X, Search, Camera, Loader2, Trash2, ChevronRight, Sparkles } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { API_URL } from '../constants';
 import { parseAIResponse } from '../helpers';
@@ -16,15 +16,21 @@ export const AddMealModal = ({ isOpen, onClose, onSave, setToast, aiCooldown, se
   const [showResults, setShowResults] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [searchSource, setSearchSource] = useState('');
-  const fileInputRef = useRef(null);
   const scannerRef = useRef(null);
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const streamRef = useRef(null);
 
-  // Cleanup scanner on unmount or close
+  // Cleanup scanner/camera on unmount or close
   useEffect(() => {
     return () => {
       if (scannerRef.current) {
         scannerRef.current.stop().catch(() => {});
         scannerRef.current = null;
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
       }
     };
   }, []);
@@ -79,8 +85,8 @@ export const AddMealModal = ({ isOpen, onClose, onSave, setToast, aiCooldown, se
     setShowResults(false);
   };
 
-  // --- BARCODE SCANNER ---
-  const startBarcodeScanner = async () => {
+  // --- COMBINED CAMERA: barcode scanning + photo snap for AI ---
+  const startCamera = async () => {
     setScanning(true);
     try {
       const html5QrCode = new Html5Qrcode("barcode-reader");
@@ -119,7 +125,7 @@ export const AddMealModal = ({ isOpen, onClose, onSave, setToast, aiCooldown, se
     }
   };
 
-  const stopBarcodeScanner = async () => {
+  const stopCamera = async () => {
     if (scannerRef.current) {
       await scannerRef.current.stop().catch(() => {});
       scannerRef.current = null;
@@ -127,34 +133,42 @@ export const AddMealModal = ({ isOpen, onClose, onSave, setToast, aiCooldown, se
     setScanning(false);
   };
 
-  // --- PHOTO SCAN (Gemini Vision — kept) ---
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (aiCooldown > 0) { setToast(`Ghost is resting for ${aiCooldown}s`); return; }
+  // Capture the current camera frame and send to AI for food identification
+  const snapPhoto = async () => {
+    if (aiCooldown > 0) { setToast(`Ghost is resting for ${aiCooldown}s`); return; }
+
+    try {
+      // Get the video element from the html5-qrcode scanner
+      const videoEl = document.querySelector('#barcode-reader video');
+      if (!videoEl) { setToast("Camera not ready"); return; }
+
+      // Draw to canvas and extract base64
+      const canvas = document.createElement('canvas');
+      canvas.width = videoEl.videoWidth;
+      canvas.height = videoEl.videoHeight;
+      canvas.getContext('2d').drawImage(videoEl, 0, 0);
+      const imageData = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+
+      // Stop camera
+      await stopCamera();
       setLoading(true);
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        try {
-          const response = await fetch(API_URL, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: `Identify food in image. Return JSON per 100g: {"name":string,"cal":number,"p":number,"c":number,"f":number} ONLY JSON`, isImage: true, imageData: reader.result.split(',')[1] })
-          });
-          const data = await response.json();
-          if (!response.ok || !data.candidates) throw new Error("Scan Failed");
-          const result = parseAIResponse(data.candidates[0].content.parts[0].text);
-          setSearchQuery(result.name);
-          setCurrentFood({ name: result.name, cal: result.cal, p: result.p, c: result.c, f: result.f });
-          setSearchSource('Ghost Vision');
-          setAiCooldown(5);
-        } catch (e) {
-          setToast("Scan Error: " + e.message);
-          setAiCooldown(3);
-        }
-        setLoading(false);
-      };
-      reader.readAsDataURL(file);
+
+      const response = await fetch(API_URL, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: `Identify food in image. Return JSON per 100g: {"name":string,"cal":number,"p":number,"c":number,"f":number} ONLY JSON`, isImage: true, imageData })
+      });
+      const data = await response.json();
+      if (!response.ok || !data.candidates) throw new Error("Scan Failed");
+      const result = parseAIResponse(data.candidates[0].content.parts[0].text);
+      setSearchQuery(result.name);
+      setCurrentFood({ name: result.name, cal: result.cal, p: result.p, c: result.c, f: result.f });
+      setSearchSource('Ghost Vision');
+      setAiCooldown(5);
+    } catch (e) {
+      setToast("Scan Error: " + e.message);
+      setAiCooldown(3);
     }
+    setLoading(false);
   };
 
   const addIngredient = () => {
@@ -188,15 +202,21 @@ export const AddMealModal = ({ isOpen, onClose, onSave, setToast, aiCooldown, se
           <div className="bg-gray-900/50 p-3 rounded-xl border border-dashed border-gray-700 relative">
             {loading && <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10 rounded-xl"><Loader2 className="animate-spin text-blue-500"/></div>}
 
-            {/* Barcode scanner viewport */}
+            {/* Camera viewport — barcode scanning + photo snap */}
             {scanning && (
               <div className="mb-3">
                 <div id="barcode-reader" className="rounded-lg overflow-hidden" style={{ width: '100%' }}></div>
-                <button onClick={stopBarcodeScanner} className="w-full mt-2 bg-red-600/20 text-red-400 text-xs font-bold py-2 rounded-lg border border-red-500/30">CANCEL SCAN</button>
+                <p className="text-center text-[10px] text-gray-500 mt-1">Point at a barcode, or snap a photo of food</p>
+                <div className="flex gap-2 mt-2">
+                  <button onClick={snapPhoto} disabled={aiCooldown > 0} className="flex-1 bg-blue-600/20 text-blue-400 text-xs font-bold py-2 rounded-lg border border-blue-500/30 flex items-center justify-center gap-1 disabled:opacity-50">
+                    <Sparkles size={12}/> SNAP FOR AI
+                  </button>
+                  <button onClick={stopCamera} className="flex-1 bg-red-600/20 text-red-400 text-xs font-bold py-2 rounded-lg border border-red-500/30">CANCEL</button>
+                </div>
               </div>
             )}
 
-            {/* Search + action buttons */}
+            {/* Search + camera button */}
             <div className="flex gap-2 mb-3">
               <div className="relative flex-1">
                 <input type="text" placeholder="Search food..." value={searchQuery}
@@ -205,9 +225,7 @@ export const AddMealModal = ({ isOpen, onClose, onSave, setToast, aiCooldown, se
                   className="w-full bg-gray-800 p-2 rounded text-sm text-white outline-none border border-gray-600"/>
                 <button onClick={handleSearch} disabled={loading} className="absolute right-2 top-2 text-gray-400 disabled:opacity-50"><Search size={16}/></button>
               </div>
-              <button onClick={startBarcodeScanner} disabled={loading || scanning} className="bg-gray-800 p-2 rounded border border-gray-600 text-gray-400 disabled:opacity-50" title="Scan barcode"><Scan size={20}/></button>
-              <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden"/>
-              <button onClick={() => fileInputRef.current.click()} disabled={loading || aiCooldown > 0} className="bg-gray-800 p-2 rounded border border-gray-600 text-gray-400 disabled:opacity-50" title="Photo scan (AI)"><Camera size={20}/></button>
+              <button onClick={startCamera} disabled={loading || scanning} className="bg-gray-800 p-2 rounded border border-gray-600 text-gray-400 disabled:opacity-50" title="Scan barcode or snap food photo"><Camera size={20}/></button>
             </div>
 
             {/* Source badge */}
