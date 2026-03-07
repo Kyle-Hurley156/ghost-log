@@ -37,3 +37,14 @@ export const INITIAL_SPLITS = [
 export const INITIAL_TARGETS = { CUT: { cal: 2200, p: 200, c: 0, f: 0 }, BULK: { cal: 3100, p: 220, c: 0, f: 0 }, MAINTAIN: { cal: 2600, p: 200, c: 0, f: 0 } };
 
 export const API_URL = 'https://ghost-log.vercel.app/api/ghost';
+
+export const ACCENT_COLORS = [
+  { name: 'Ghost Blue', value: '#3b82f6' },
+  { name: 'Phantom Purple', value: '#a855f7' },
+  { name: 'Specter Green', value: '#22c55e' },
+  { name: 'Ember Red', value: '#ef4444' },
+  { name: 'Neon Cyan', value: '#06b6d4' },
+  { name: 'Solar Orange', value: '#f97316' },
+  { name: 'Hot Pink', value: '#ec4899' },
+  { name: 'Pure White', value: '#e2e8f0' },
+];

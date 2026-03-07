@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Dumbbell, Utensils, BarChart3, Ghost, Lock, Cloud, CloudOff, Loader2, Apple,
-  TrendingUp, Footprints, BrainCircuit, Battery, Flame, Beef, Wheat, Droplet
+  Dumbbell, Utensils, BarChart3, Lock, Cloud, CloudOff, Loader2, Apple,
+  TrendingUp, Footprints, BrainCircuit, Battery, Flame, Beef, Wheat, Droplet,
+  Settings, Palette
 } from 'lucide-react';
 
 import { Capacitor } from '@capacitor/core';
@@ -11,8 +12,8 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, linkWithPopup, OAuthProvider } from 'firebase/auth';
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
 
-import { FIREBASE_CONFIG, INITIAL_SPLITS, INITIAL_TARGETS } from './constants';
-import { getLocalDate, useStickyState } from './helpers';
+import { FIREBASE_CONFIG, INITIAL_SPLITS, INITIAL_TARGETS, ACCENT_COLORS } from './constants';
+import { getLocalDate, useStickyState, applyAccentColor } from './helpers';
 
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Toast } from './components/Toast';
@@ -41,9 +42,20 @@ const PurchasesFallback = typeof Purchases !== 'undefined' ? Purchases : {
   purchasePackage: async () => ({ customerInfo: { entitlements: { active: {} } } })
 };
 
+// Ghost Logo SVG component matching the brand
+const GhostLogo = ({ size = 28 }) => (
+  <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M50 8C30 8 18 24 18 42v32c0 4 2 8 6 8s6-4 6-8v-4c0-4 2-8 6-8s6 4 6 8v4c0 4 2 8 6 8s6-4 6-8v-4c0-4 2-8 6-8s6 4 6 8v4c0 4 2 8 6 8s6-4 6-8V42C82 24 70 8 50 8z" fill="white"/>
+    <circle cx="38" cy="38" r="5" fill="black"/>
+    <circle cx="62" cy="38" r="5" fill="black"/>
+    <ellipse cx="50" cy="52" rx="4" ry="3" fill="black"/>
+  </svg>
+);
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('train');
   const [phase, setPhase] = useStickyState('CUT', 'ghost_phase');
+  const [accentColor, setAccentColor] = useStickyState('#3b82f6', 'ghost_accent');
 
   // UI States
   const [showDailyCheckin, setShowDailyCheckin] = useState(false);
@@ -52,6 +64,7 @@ export default function App() {
   const [showGhostChefModal, setShowGhostChefModal] = useState(false);
   const [showCardioModal, setShowCardioModal] = useState(false);
   const [showAddMealModal, setShowAddMealModal] = useState(false);
+  const [showColorPicker, setShowColorPicker] = useState(false);
   const [toastMsg, setToastMsg] = useState(null);
   const [aiCooldown, setAiCooldown] = useState(0);
 
@@ -75,6 +88,9 @@ export default function App() {
 
   const [logDate, setLogDate] = useState(getLocalDate());
   const [dailyStatsInput, setDailyStatsInput] = useState({ weight: '', steps: '', water: '', stress: 3, fatigue: 3, sleepHours: '', sleepQuality: 3, activity: 3 });
+
+  // Apply accent color on mount and change
+  useEffect(() => { applyAccentColor(accentColor); }, [accentColor]);
 
   // --- INITIALIZATION (FIREBASE & REVENUECAT) ---
   useEffect(() => {
@@ -223,7 +239,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="bg-black min-h-screen text-gray-100 font-sans max-w-md mx-auto relative shadow-2xl overflow-hidden border-x border-gray-800 pt-16">
+      <div className="bg-black min-h-screen text-gray-100 font-sans max-w-md mx-auto relative shadow-2xl overflow-hidden border-x border-gray-800/50 pt-16">
         {toastMsg && <Toast message={toastMsg} onClose={() => setToastMsg(null)} />}
         <ConfirmModal isOpen={confirmState.isOpen} message={confirmState.message} onConfirm={confirmState.onConfirm} onCancel={() => setConfirmState({isOpen:false, message:'', onConfirm:null})} />
 
@@ -250,55 +266,88 @@ export default function App() {
            setToastMsg("Cardio Logged");
         }} />
 
-        <GhostAiPanel show={showGhostPanel} onClose={()=>setShowGhostPanel(false)}/>
+        <GhostAiPanel show={showGhostPanel} onClose={()=>setShowGhostPanel(false)} accentColor={accentColor}/>
 
-        {!showGhostPanel && !showDailyCheckin && !showAddMealModal && !showTargetModal && !showGhostChefModal && !showCardioModal && !showPaywall && <button onClick={()=>setShowGhostPanel(true)} className="fixed bottom-24 right-4 bg-blue-600 text-white p-4 rounded-full shadow-lg z-40"><Ghost size={24}/></button>}
+        {/* Floating Ghost AI Button */}
+        {!showGhostPanel && !showDailyCheckin && !showAddMealModal && !showTargetModal && !showGhostChefModal && !showCardioModal && !showPaywall && (
+          <button onClick={()=>setShowGhostPanel(true)} className="fixed bottom-24 right-4 accent-bg text-white p-4 rounded-full shadow-lg z-40 accent-glow transition-all active:scale-95">
+            <GhostLogo size={24}/>
+          </button>
+        )}
 
         <PaywallModal isOpen={showPaywall} onClose={() => setShowPaywall(false)} onSubscribe={handleSubscribeClick} loading={isPaywallLoading}/>
 
+        {/* Color Picker Overlay */}
+        {showColorPicker && (
+          <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-6 animate-in fade-in" onClick={() => setShowColorPicker(false)}>
+            <div className="bg-gray-900 rounded-2xl p-6 border border-gray-700 w-full max-w-xs" onClick={e => e.stopPropagation()}>
+              <h3 className="text-white font-black text-lg mb-4 flex items-center gap-2"><Palette size={18} className="accent-text"/> ACCENT COLOR</h3>
+              <div className="grid grid-cols-4 gap-3">
+                {ACCENT_COLORS.map(c => (
+                  <button key={c.value} onClick={() => { setAccentColor(c.value); setShowColorPicker(false); }}
+                    className={`w-full aspect-square rounded-xl border-2 transition-all active:scale-90 ${accentColor === c.value ? 'border-white scale-110' : 'border-gray-700'}`}
+                    style={{ backgroundColor: c.value }}
+                    title={c.name}
+                  />
+                ))}
+              </div>
+              <p className="text-gray-500 text-[10px] text-center mt-3 uppercase tracking-widest">Tap to select</p>
+            </div>
+          </div>
+        )}
+
         {/* HEADER */}
-        <div className="bg-gray-900 border-b border-gray-800 px-4 pb-4 pt-16 fixed top-0 left-0 right-0 z-20 max-w-md mx-auto">
-          <div className="flex justify-between items-start mb-4">
+        <div className="bg-gray-950 border-b border-gray-800/50 px-4 pb-4 pt-14 fixed top-0 left-0 right-0 z-20 max-w-md mx-auto safe-area-top">
+          <div className="flex justify-between items-start mb-3">
             <div>
-              <h1 className="text-2xl font-black italic text-white flex items-center gap-2">GHOST<span className="text-gray-500">LOG</span> {isPro && <span className="bg-gradient-to-r from-blue-500 to-purple-500 text-white text-[10px] px-2 py-0.5 rounded uppercase tracking-widest font-bold">PRO</span>}</h1>
-              <div className="flex flex-col gap-1 mt-1">
+              <div className="flex items-center gap-2 mb-1">
+                <GhostLogo size={28}/>
+                <h1 className="text-2xl font-black tracking-tight text-white">GHOST<span className="text-gray-500">LOG</span></h1>
+                {isPro && <span className="accent-bg text-white text-[9px] px-2 py-0.5 rounded-full uppercase tracking-widest font-bold">PRO</span>}
+              </div>
+              <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-                  {cloudStatus === 'synced' ? <Cloud size={12} className="text-blue-400"/> : cloudStatus === 'syncing' ? <Loader2 size={12} className="animate-spin text-gray-400"/> : <CloudOff size={12} className="text-red-400"/>}
-                  {cloudStatus === 'synced' ? 'Cloud Backup Active' : cloudStatus === 'syncing' ? 'Syncing...' : 'Local Mode'}
+                  {cloudStatus === 'synced' ? <Cloud size={11} className="accent-text"/> : cloudStatus === 'syncing' ? <Loader2 size={11} className="animate-spin text-gray-400"/> : <CloudOff size={11} className="text-red-400"/>}
+                  {cloudStatus === 'synced' ? 'Synced' : cloudStatus === 'syncing' ? 'Syncing...' : 'Local'}
                 </div>
                 {cloudUser?.isAnonymous && (
-                  <button onClick={handleAppleBackup} className="text-[10px] font-bold text-gray-400 hover:text-white flex items-center gap-1 w-fit bg-gray-800 px-2 py-1 rounded-md border border-gray-700 transition-colors">
-                    <Apple size={12} /> Link Apple ID
+                  <button onClick={handleAppleBackup} className="text-[10px] font-bold text-gray-500 hover:text-white flex items-center gap-1 bg-gray-800/50 px-2 py-0.5 rounded-md border border-gray-700/50 transition-colors">
+                    <Apple size={10} /> Backup
                   </button>
                 )}
               </div>
             </div>
-            <button onClick={()=>handlePremiumFeature(() => setShowTargetModal(true))} className={`text-xs font-bold px-3 py-1 rounded-full border flex items-center gap-1 mt-1 ${phase==='CUT'?'text-red-400 border-red-500/30': phase==='BULK' ? 'text-green-400 border-green-500/30' : 'text-blue-400 border-blue-500/30'}`}>
-                  {phase} {!isPro && <Lock size={10} className="ml-1 opacity-50"/>}
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setShowColorPicker(true)} className="p-1.5 rounded-lg text-gray-600 hover:text-white transition-colors">
+                <Palette size={16}/>
+              </button>
+              <button onClick={()=>handlePremiumFeature(() => setShowTargetModal(true))} className={`text-xs font-bold px-3 py-1.5 rounded-full border flex items-center gap-1 transition-all ${phase==='CUT'?'text-red-400 border-red-500/30 bg-red-500/5': phase==='BULK' ? 'text-green-400 border-green-500/30 bg-green-500/5' : 'accent-text accent-border-dim accent-bg-dim'}`}>
+                    {phase} {!isPro && <Lock size={10} className="ml-1 opacity-50"/>}
+              </button>
+            </div>
           </div>
 
           {/* STAT DASHBOARD */}
-          <div className="grid grid-cols-4 gap-2 animate-in fade-in">
+          <div className="grid grid-cols-4 gap-2">
              {activeTab === 'train' && [
-               {icon: TrendingUp, val: dailyStatsInput.weight||'-', lbl: 'Weight', col: 'text-blue-400'},
-               {icon: Footprints, val: dailyStatsInput.steps > 1000 ? (dailyStatsInput.steps/1000).toFixed(1)+'k' : (dailyStatsInput.steps||'-'), lbl: 'Steps', col: 'text-purple-400'},
+               {icon: TrendingUp, val: dailyStatsInput.weight||'-', lbl: 'Weight', col: 'accent-text'},
+               {icon: Footprints, val: dailyStatsInput.steps > 1000 ? (dailyStatsInput.steps/1000).toFixed(1)+'k' : (dailyStatsInput.steps||'-'), lbl: 'Steps', col: 'text-gray-300'},
                {icon: BrainCircuit, val: `${dailyStatsInput.stress}/5`, lbl: 'Stress', col: dailyStatsInput.stress>3?'text-red-400':'text-green-400'},
                {icon: Battery, val: `${dailyStatsInput.fatigue}/5`, lbl: 'Fatigue', col: dailyStatsInput.fatigue>3?'text-red-400':'text-green-400'}
-             ].map((s,i) => <div key={i} className="bg-gray-800 p-2 rounded-lg text-center border border-gray-700"><s.icon size={16} className={`mx-auto mb-1 ${s.col}`}/><p className="text-[10px] text-gray-400">{s.lbl}</p><p className="text-white font-bold text-xs">{s.val}</p></div>)}
+             ].map((s,i) => <div key={i} className="bg-gray-900/80 p-2 rounded-xl text-center border border-gray-800/50"><s.icon size={14} className={`mx-auto mb-1 ${s.col}`}/><p className="text-[9px] text-gray-500 uppercase tracking-wider">{s.lbl}</p><p className="text-white font-bold text-xs">{s.val}</p></div>)}
 
              {activeTab === 'eat' && [
-               {icon: Flame, val: `${dailyTotals.cal}/${currentTargets.cal}`, lbl: 'Cals', col: 'text-blue-400', border: dailyTotals.cal > currentTargets.cal ? 'border-red-500' : 'border-gray-700'},
-               {icon: Beef, val: `${dailyTotals.p}/${currentTargets.p}`, lbl: 'Prot', col: 'text-red-400', border: 'border-gray-700'},
-               {icon: Wheat, val: `${dailyTotals.c}/${currentTargets.c}`, lbl: 'Carb', col: 'text-orange-400', border: 'border-gray-700'},
-               {icon: Droplet, val: `${dailyTotals.f}/${currentTargets.f}`, lbl: 'Fat', col: 'text-yellow-400', border: 'border-gray-700'}
-             ].map((s,i) => <div key={i} className={`bg-gray-800 p-2 rounded-lg text-center border ${s.border}`}><s.icon size={16} className={`mx-auto mb-1 ${s.col}`}/><p className="text-[10px] text-gray-400">{s.lbl}</p><p className="text-white font-bold text-xs">{s.val}</p></div>)}
-             {activeTab === 'stats' && <div className="col-span-4 h-12 flex items-center justify-center"><p className="text-gray-500 text-xs uppercase tracking-widest font-bold">Analytics</p></div>}
+               {icon: Flame, val: `${dailyTotals.cal}/${currentTargets.cal}`, lbl: 'Cals', col: 'accent-text', over: dailyTotals.cal > currentTargets.cal},
+               {icon: Beef, val: `${dailyTotals.p}/${currentTargets.p}`, lbl: 'Prot', col: 'text-red-400', over: false},
+               {icon: Wheat, val: `${dailyTotals.c}/${currentTargets.c}`, lbl: 'Carb', col: 'text-orange-400', over: false},
+               {icon: Droplet, val: `${dailyTotals.f}/${currentTargets.f}`, lbl: 'Fat', col: 'text-yellow-400', over: false}
+             ].map((s,i) => <div key={i} className={`bg-gray-900/80 p-2 rounded-xl text-center border ${s.over ? 'border-red-500/40' : 'border-gray-800/50'}`}><s.icon size={14} className={`mx-auto mb-1 ${s.col}`}/><p className="text-[9px] text-gray-500 uppercase tracking-wider">{s.lbl}</p><p className="text-white font-bold text-xs">{s.val}</p></div>)}
+             {activeTab === 'stats' && <div className="col-span-4 h-10 flex items-center justify-center"><p className="text-gray-600 text-[10px] uppercase tracking-[0.2em] font-bold">Analytics Dashboard</p></div>}
           </div>
         </div>
 
         {/* MAIN CONTENT AREA */}
-        <div className="pt-52 pb-32">
+        <div className="pt-48 pb-32">
            {activeTab === 'train' && <div className="p-4"><TrainTab workoutSplits={workoutSplits} setWorkoutSplits={setWorkoutSplits} workoutHistory={workoutHistory} setWorkoutHistory={setWorkoutHistory} workoutEditMode={workoutEditMode} setWorkoutEditMode={setWorkoutEditMode} addSplit={addSplit} deleteSplit={deleteSplit} renameSplit={renameSplit} handleSortSplits={handleSortSplits} dragItem={dragItem} dragOverItem={dragOverItem} phase={phase} dailyStats={dailyStatsInput} requestConfirm={requestConfirm} setShowCardioModal={setShowCardioModal}/></div>}
 
            {activeTab === 'eat' && <div className="p-4"><EatTab savedMeals={savedMeals} dailyLog={dailyLog} mealEditMode={mealEditMode} setMealEditMode={setMealEditMode} setShowAddMealModal={setShowAddMealModal} setShowGhostChefModal={setShowGhostChefModal} logMeal={logMeal} deleteSavedMeal={deleteSavedMeal} deleteLogItem={deleteLogItem} getMealMacros={(m)=>m.ingredients.reduce((a,i)=>({cal:a.cal+i.cal,p:a.p+i.p,c:a.c+i.c,f:a.f+i.f}),{cal:0,p:0,c:0,f:0})} dragItem={dragItem} dragOverItem={dragOverItem} handleSortMeals={handleSortMeals} requestConfirm={requestConfirm} userTargets={currentTargets} dailyStats={dailyStatsInput} isPro={isPro} handlePremiumFeature={handlePremiumFeature}/></div>}
@@ -307,11 +356,20 @@ export default function App() {
         </div>
 
         {/* BOTTOM NAV */}
-        <div className="fixed bottom-0 w-full max-w-md bg-gray-900/90 backdrop-blur-lg border-t border-gray-800 p-2 pb-6 z-40">
+        <div className="fixed bottom-0 w-full max-w-md bg-gray-950/95 backdrop-blur-xl border-t border-gray-800/50 p-2 pb-8 z-40 safe-area-bottom">
           <div className="flex justify-around items-center">
-            <button onClick={()=>setActiveTab('train')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${activeTab==='train'?'text-blue-400':'text-gray-500'}`}><Dumbbell size={24}/><span className="text-[10px] font-bold">LIFT</span></button>
-            <button onClick={()=>setActiveTab('eat')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${activeTab==='eat'?'text-blue-400':'text-gray-500'}`}><Utensils size={24}/><span className="text-[10px] font-bold">EAT</span></button>
-            <button onClick={()=>setActiveTab('stats')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${activeTab==='stats'?'text-blue-400':'text-gray-500'}`}><BarChart3 size={24}/><span className="text-[10px] font-bold">STATS</span></button>
+            {[
+              { id: 'train', icon: Dumbbell, label: 'LIFT' },
+              { id: 'eat', icon: Utensils, label: 'EAT' },
+              { id: 'stats', icon: BarChart3, label: 'STATS' },
+            ].map(tab => (
+              <button key={tab.id} onClick={()=>setActiveTab(tab.id)}
+                className={`p-2 rounded-xl flex flex-col items-center gap-1 transition-all ${activeTab===tab.id ? 'accent-text' : 'text-gray-600'}`}>
+                <tab.icon size={22} strokeWidth={activeTab===tab.id ? 2.5 : 1.5}/>
+                <span className={`text-[9px] font-bold tracking-wider ${activeTab===tab.id ? '' : 'text-gray-600'}`}>{tab.label}</span>
+                {activeTab===tab.id && <div className="w-1 h-1 rounded-full accent-bg"/>}
+              </button>
+            ))}
           </div>
         </div>
       </div>

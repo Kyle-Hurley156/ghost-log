@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Ghost, Loader2, Timer, Wand2 } from 'lucide-react';
+import { X, Loader2, Timer, Wand2, Sparkles } from 'lucide-react';
 import { API_URL, INITIAL_TARGETS } from '../constants';
 import { parseAIResponse } from '../helpers';
 
@@ -44,23 +44,57 @@ export const TargetEditorModal = ({ isOpen, onClose, activePhase, setActivePhase
 
   return (
     <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 animate-in fade-in">
-      <div className="bg-gray-800 w-full max-w-xs rounded-2xl p-6 border border-gray-700 shadow-2xl">
-        <div className="flex justify-between items-center mb-4"><h3 className="text-xl font-black italic text-white uppercase">TARGETS</h3><button onClick={onClose}><X size={24} className="text-gray-500"/></button></div>
-        <div className="flex bg-gray-900 p-1 rounded-lg mb-6">{['CUT', 'MAINTAIN', 'BULK'].map(p => (<button key={p} onClick={() => setEditingPhase(p)} className={`flex-1 py-2 text-[10px] font-bold rounded-md transition-all ${editingPhase === p ? 'bg-gray-700 text-white' : 'text-gray-500'}`}>{p}</button>))}</div>
-        <div className="mb-6 flex items-center justify-between bg-gray-900/50 p-3 rounded-lg border border-gray-700"><span className="text-xs text-gray-400">Current Mode: <span className={activePhase==='CUT'?'text-red-400 font-bold':activePhase==='BULK'?'text-green-400 font-bold':'text-blue-400 font-bold'}>{activePhase}</span></span>{activePhase !== editingPhase && (<button onClick={() => setActivePhase(editingPhase)} className="text-[10px] bg-blue-600/20 text-blue-400 px-2 py-1 rounded border border-blue-500/30 font-bold">SET AS ACTIVE</button>)}</div>
-        {ghostExplanation && (<div className="mb-4 p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg"><div className="flex items-center gap-2 text-blue-300 text-xs font-bold mb-1"><Ghost size={12}/> GHOST REASONING</div><p className="text-xs text-gray-300">{ghostExplanation}</p><p className="text-xs text-blue-200 mt-1 font-mono">Suggested Protein Range: {proteinRange}</p></div>)}
-        <div className="space-y-4">
-          <div><label className="text-xs text-blue-400 font-bold uppercase">Calories (Target)</label><input type="number" value={localTargets.cal||''} onChange={e=>setLocalTargets({...localTargets, cal:parseInt(e.target.value)||''})} className="w-full bg-gray-900 p-3 rounded-lg text-white font-bold text-center border border-gray-600"/></div>
-          <div><label className="text-xs text-red-400 font-bold uppercase text-center block">Protein (Target)</label><input type="number" value={localTargets.p||''} onChange={e=>setLocalTargets({...localTargets, p:parseInt(e.target.value)||''})} className="w-full bg-gray-900 p-3 rounded-lg text-white font-bold text-center border border-gray-600"/></div>
-          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-700">
-            <div><label className="text-[10px] text-gray-500 font-bold uppercase text-center block">Carbs (Optional)</label><input type="number" value={localTargets.c||''} onChange={e=>setLocalTargets({...localTargets, c:parseInt(e.target.value)||''})} placeholder="-" className="w-full bg-gray-900 p-2 rounded-lg text-gray-400 text-center border border-gray-700 text-xs"/></div>
-            <div><label className="text-[10px] text-gray-500 font-bold uppercase text-center block">Fats (Optional)</label><input type="number" value={localTargets.f||''} onChange={e=>setLocalTargets({...localTargets, f:parseInt(e.target.value)||''})} placeholder="-" className="w-full bg-gray-900 p-2 rounded-lg text-gray-400 text-center border border-gray-700 text-xs"/></div>
+      <div className="bg-gray-900 w-full max-w-xs rounded-2xl p-6 border border-gray-800/50 shadow-2xl">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-black tracking-tight text-white uppercase">TARGETS</h3>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-gray-800 transition-colors"><X size={22} className="text-gray-500"/></button>
+        </div>
+
+        {/* Phase tabs */}
+        <div className="flex bg-black/50 p-1 rounded-xl mb-5 border border-gray-800/50">
+          {['CUT', 'MAINTAIN', 'BULK'].map(p => (
+            <button key={p} onClick={() => setEditingPhase(p)}
+              className={`flex-1 py-2 text-[10px] font-bold rounded-lg transition-all ${editingPhase === p ? 'bg-gray-800 text-white' : 'text-gray-600'}`}>{p}</button>
+          ))}
+        </div>
+
+        {/* Active mode indicator */}
+        <div className="mb-5 flex items-center justify-between bg-black/30 p-3 rounded-xl border border-gray-800/50">
+          <span className="text-[10px] text-gray-500">Active: <span className={activePhase==='CUT'?'text-red-400 font-bold':activePhase==='BULK'?'text-green-400 font-bold':'accent-text font-bold'}>{activePhase}</span></span>
+          {activePhase !== editingPhase && (
+            <button onClick={() => setActivePhase(editingPhase)} className="text-[10px] accent-bg-dim accent-text px-2 py-1 rounded-lg accent-border-dim border font-bold">SET ACTIVE</button>
+          )}
+        </div>
+
+        {/* Ghost explanation */}
+        {ghostExplanation && (
+          <div className="mb-4 p-3 accent-bg-dim accent-border-dim border rounded-xl">
+            <div className="flex items-center gap-2 accent-text text-xs font-bold mb-1"><Sparkles size={12}/> GHOST REASONING</div>
+            <p className="text-xs text-gray-300">{ghostExplanation}</p>
+            <p className="text-xs accent-text mt-1 font-mono">Protein: {proteinRange}</p>
+          </div>
+        )}
+
+        {/* Target inputs */}
+        <div className="space-y-3">
+          <div>
+            <label className="text-[10px] accent-text font-bold uppercase tracking-wider">Calories</label>
+            <input type="number" value={localTargets.cal||''} onChange={e=>setLocalTargets({...localTargets, cal:parseInt(e.target.value)||''})} className="w-full bg-black/50 p-3 rounded-xl text-white font-bold text-center border border-gray-800/50 focus:accent-border outline-none transition-colors"/>
+          </div>
+          <div>
+            <label className="text-[10px] text-red-400 font-bold uppercase tracking-wider">Protein</label>
+            <input type="number" value={localTargets.p||''} onChange={e=>setLocalTargets({...localTargets, p:parseInt(e.target.value)||''})} className="w-full bg-black/50 p-3 rounded-xl text-white font-bold text-center border border-gray-800/50 outline-none"/>
+          </div>
+          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-800/30">
+            <div><label className="text-[9px] text-gray-600 font-bold uppercase text-center block">Carbs</label><input type="number" value={localTargets.c||''} onChange={e=>setLocalTargets({...localTargets, c:parseInt(e.target.value)||''})} placeholder="-" className="w-full bg-black/50 p-2 rounded-xl text-gray-400 text-center border border-gray-800/50 text-xs outline-none"/></div>
+            <div><label className="text-[9px] text-gray-600 font-bold uppercase text-center block">Fats</label><input type="number" value={localTargets.f||''} onChange={e=>setLocalTargets({...localTargets, f:parseInt(e.target.value)||''})} placeholder="-" className="w-full bg-black/50 p-2 rounded-xl text-gray-400 text-center border border-gray-800/50 text-xs outline-none"/></div>
           </div>
         </div>
-        <button onClick={handleAutoCalculate} disabled={loading || aiCooldown > 0} className="w-full mt-6 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-500 text-blue-300 text-xs font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-all">
-          {loading ? <Loader2 size={14} className="animate-spin"/> : aiCooldown > 0 ? <><Timer size={14}/> RESTING ({aiCooldown}s)</> : <><Wand2 size={14}/> ASK GHOST TO CALCULATE</>}
+
+        <button onClick={handleAutoCalculate} disabled={loading || aiCooldown > 0} className="w-full mt-5 bg-gray-800 hover:bg-gray-700 disabled:bg-gray-900 disabled:text-gray-600 accent-text text-xs font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
+          {loading ? <Loader2 size={14} className="animate-spin"/> : aiCooldown > 0 ? <><Timer size={14}/> RESTING ({aiCooldown}s)</> : <><Wand2 size={14}/> ASK GHOST</>}
         </button>
-        <button onClick={handleSave} className="w-full mt-2 bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-xl">SAVE {editingPhase} TARGETS</button>
+        <button onClick={handleSave} className="w-full mt-2 accent-bg hover:opacity-90 text-white font-bold py-3 rounded-xl transition-all active:scale-[0.98]">SAVE {editingPhase} TARGETS</button>
       </div>
     </div>
   );

@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --accent: #3b82f6;
+  --accent-dim: rgba(59, 130, 246, 0.15);
+}
+
 body {
   margin: 0;
   padding: 0;
@@ -10,24 +15,19 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overscroll-behavior: none; /* Prevents "bounce" on mobile */
+  overscroll-behavior: none;
 }
 
-/* Hide scrollbar for Chrome, Safari and Opera */
-::-webkit-scrollbar {
-  display: none;
-}
+::-webkit-scrollbar { display: none; }
+* { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* Hide scrollbar for IE, Edge and Firefox */
-* {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
-}
+.safe-area-top { padding-top: env(safe-area-inset-top); }
+.safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
 
-/* Safe area padding for iPhones with notches */
-.safe-area-top {
-  padding-top: env(safe-area-inset-top);
-}
-.safe-area-bottom {
-  padding-bottom: env(safe-area-inset-bottom);
-}
+/* Accent color utilities */
+.accent-text { color: var(--accent); }
+.accent-bg { background-color: var(--accent); }
+.accent-bg-dim { background-color: var(--accent-dim); }
+.accent-border { border-color: var(--accent); }
+.accent-border-dim { border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
+.accent-glow { box-shadow: 0 0 20px color-mix(in srgb, var(--accent) 20%, transparent); }

@@ -2,13 +2,45 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+
+    <!-- Branding -->
+    <title>GhostLog</title>
+    <meta name="description" content="AI-powered fitness & nutrition tracker. Train smarter. Eat better.">
+    <meta name="theme-color" content="#000000">
+
+    <!-- Icons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- iOS PWA -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>GhostLog</title>
+    <meta name="apple-mobile-web-app-title" content="GhostLog">
+
+    <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              accent: {
+                DEFAULT: 'var(--accent)',
+                dim: 'var(--accent-dim)',
+              }
+            }
+          }
+        }
+      }
+    </script>
+
     <style>
+      :root {
+        --accent: #3b82f6;
+        --accent-dim: rgba(59, 130, 246, 0.15);
+      }
       body { background-color: black; margin: 0; padding: 0; overscroll-behavior: none; }
     </style>
   </head>
