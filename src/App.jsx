@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Dumbbell, Utensils, BarChart3, Lock, Cloud, CloudOff, Loader2, Apple,
-  TrendingUp, Footprints, BrainCircuit, Battery, Flame, Beef, Wheat, Droplet,
-  Settings, Palette
+  TrendingUp, Footprints, BrainCircuit, Battery, Flame, Beef, Wheat, Droplet
 } from 'lucide-react';
 
 import { Capacitor } from '@capacitor/core';
@@ -12,8 +11,8 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, linkWithPopup, OAuthProvider } from 'firebase/auth';
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
 
-import { FIREBASE_CONFIG, INITIAL_SPLITS, INITIAL_TARGETS, ACCENT_COLORS } from './constants';
-import { getLocalDate, useStickyState, applyAccentColor } from './helpers';
+import { FIREBASE_CONFIG, INITIAL_SPLITS, INITIAL_TARGETS } from './constants';
+import { getLocalDate, useStickyState } from './helpers';
 
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Toast } from './components/Toast';
@@ -55,7 +54,6 @@ const GhostLogo = ({ size = 28 }) => (
 export default function App() {
   const [activeTab, setActiveTab] = useState('train');
   const [phase, setPhase] = useStickyState('CUT', 'ghost_phase');
-  const [accentColor, setAccentColor] = useStickyState('#3b82f6', 'ghost_accent');
 
   // UI States
   const [showDailyCheckin, setShowDailyCheckin] = useState(false);
@@ -64,7 +62,6 @@ export default function App() {
   const [showGhostChefModal, setShowGhostChefModal] = useState(false);
   const [showCardioModal, setShowCardioModal] = useState(false);
   const [showAddMealModal, setShowAddMealModal] = useState(false);
-  const [showColorPicker, setShowColorPicker] = useState(false);
   const [toastMsg, setToastMsg] = useState(null);
   const [aiCooldown, setAiCooldown] = useState(0);
 
@@ -88,9 +85,6 @@ export default function App() {
 
   const [logDate, setLogDate] = useState(getLocalDate());
   const [dailyStatsInput, setDailyStatsInput] = useState({ weight: '', steps: '', water: '', stress: 3, fatigue: 3, sleepHours: '', sleepQuality: 3, activity: 3 });
-
-  // Apply accent color on mount and change
-  useEffect(() => { applyAccentColor(accentColor); }, [accentColor]);
 
   // --- INITIALIZATION (FIREBASE & REVENUECAT) ---
   useEffect(() => {
@@ -277,25 +271,6 @@ export default function App() {
 
         <PaywallModal isOpen={showPaywall} onClose={() => setShowPaywall(false)} onSubscribe={handleSubscribeClick} loading={isPaywallLoading}/>
 
-        {/* Color Picker Overlay */}
-        {showColorPicker && (
-          <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-6 animate-in fade-in" onClick={() => setShowColorPicker(false)}>
-            <div className="bg-gray-900 rounded-2xl p-6 border border-gray-700 w-full max-w-xs" onClick={e => e.stopPropagation()}>
-              <h3 className="text-white font-black text-lg mb-4 flex items-center gap-2"><Palette size={18} className="accent-text"/> ACCENT COLOR</h3>
-              <div className="grid grid-cols-4 gap-3">
-                {ACCENT_COLORS.map(c => (
-                  <button key={c.value} onClick={() => { setAccentColor(c.value); setShowColorPicker(false); }}
-                    className={`w-full aspect-square rounded-xl border-2 transition-all active:scale-90 ${accentColor === c.value ? 'border-white scale-110' : 'border-gray-700'}`}
-                    style={{ backgroundColor: c.value }}
-                    title={c.name}
-                  />
-                ))}
-              </div>
-              <p className="text-gray-500 text-[10px] text-center mt-3 uppercase tracking-widest">Tap to select</p>
-            </div>
-          </div>
-        )}
-
         {/* HEADER */}
         <div className="bg-gray-950 border-b border-gray-800/50 px-4 pb-4 pt-14 fixed top-0 left-0 right-0 z-20 max-w-md mx-auto safe-area-top">
           <div className="flex justify-between items-start mb-3">
@@ -318,9 +293,6 @@ export default function App() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={() => setShowColorPicker(true)} className="p-1.5 rounded-lg text-gray-600 hover:text-white transition-colors">
-                <Palette size={16}/>
-              </button>
               <button onClick={()=>handlePremiumFeature(() => setShowTargetModal(true))} className={`text-xs font-bold px-3 py-1.5 rounded-full border flex items-center gap-1 transition-all ${phase==='CUT'?'text-red-400 border-red-500/30 bg-red-500/5': phase==='BULK' ? 'text-green-400 border-green-500/30 bg-green-500/5' : 'accent-text accent-border-dim accent-bg-dim'}`}>
                     {phase} {!isPro && <Lock size={10} className="ml-1 opacity-50"/>}
               </button>
