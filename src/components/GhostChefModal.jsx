@@ -3,7 +3,7 @@ import { X, ChefHat, Loader2, Timer, Sparkles, Send } from 'lucide-react';
 import { API_URL } from '../constants';
 import { parseAIResponse } from '../helpers';
 
-const MAX_PROMPTS = 8;
+const MAX_PROMPTS = 20;
 
 export const GhostChefModal = ({ isOpen, onClose, targets, currentTotals, setToast, aiCooldown, setAiCooldown }) => {
   const [loading, setLoading] = useState(false);

@@ -30,13 +30,18 @@ export default async function handler(req, res) {
   try {
     // 3. Construct the payload based on whether it's text or a scanned food image
     let body;
+    const generationConfig = {
+      thinkingConfig: { thinkingBudget: 0 }
+    };
     if (isImage) {
-      body = { 
-        contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: imageData } }] }] 
+      body = {
+        contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: imageData } }] }],
+        generationConfig
       };
     } else {
-      body = { 
-        contents: [{ parts: [{ text: prompt }] }] 
+      body = {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig
       };
     }
 
