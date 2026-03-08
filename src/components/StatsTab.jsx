@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { Edit3, Loader2, Lock, Dumbbell, HeartPulse, Sparkles } from 'lucide-react';
+import { Edit3, Loader2, Lock, Dumbbell, HeartPulse, Sparkles, Download } from 'lucide-react';
 import { API_URL } from '../constants';
 import { getLocalDate } from '../helpers';
 
-export const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workoutHistory, setToast, userTargets, phase, aiCooldown, setAiCooldown, isPro, handlePremiumFeature }) => {
+export const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workoutHistory, setToast, userTargets, phase, aiCooldown, setAiCooldown, isPro, handlePremiumFeature, savedMeals }) => {
   const [localStat, setLocalStat] = useState('weight');
   const [timeRange, setTimeRange] = useState('1W');
   const [focusedStatEntry, setFocusedStatEntry] = useState(null);
@@ -44,6 +44,50 @@ export const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workou
     setLoadingReport(false);
   };
 
+  // --- CSV EXPORT ---
+  const exportData = async () => {
+    // Stats CSV
+    const statsHeader = 'Date,Weight,Calories,Steps,Water,Sleep,Stress,Fatigue,Activity,Cardio Min,Cardio Cal\n';
+    const statsRows = [...statsHistory].sort((a,b) => a.date.localeCompare(b.date)).map(d =>
+      `${d.date},${d.weight||''},${d.cals||''},${d.steps||''},${d.water||''},${d.sleep||''},${d.stress||''},${d.fatigue||''},${d.activity||''},${d.cardio||''},${d.cardioCalories||''}`
+    ).join('\n');
+
+    // Workout CSV
+    const workoutHeader = '\n\nDate,Workout,Type,Exercise,Set,Weight,Reps\n';
+    const workoutRows = workoutHistory.map(w => {
+      if (w.type === 'cardio') return `${w.date},${w.name},cardio,,,${w.cardioData?.duration||''}min,${w.cardioData?.calories||''}cal`;
+      return (w.exercises || []).map(ex =>
+        (ex.sets || []).map((s, si) => `${w.date},${w.name},weights,${ex.name},${si+1},${s.weight||''},${s.reps||''}`).join('\n')
+      ).join('\n');
+    }).join('\n');
+
+    const csv = statsHeader + statsRows + workoutHeader + workoutRows;
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+
+    // Try native share (mobile), fall back to download
+    if (navigator.share && navigator.canShare) {
+      try {
+        const file = new File([csv], `ghostlog-export-${getLocalDate()}.csv`, { type: 'text/csv' });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: 'GhostLog Export' });
+          setToast('Export shared');
+          return;
+        }
+      } catch (e) {
+        if (e.name !== 'AbortError') console.warn('Share failed, downloading', e);
+      }
+    }
+
+    // Fallback: download
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ghostlog-export-${getLocalDate()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setToast('CSV downloaded');
+  };
+
   const maxVal = Math.max(...filteredHistory.map(d => localStat === 'cardio' ? (d.cardioCalories || 0) : (d[localStat] || 0)), 1);
   const minVal = Math.min(...filteredHistory.map(d => localStat === 'cardio' ? (d.cardioCalories || 0) : (d[localStat] || 0)), 0);
   const range = maxVal - minVal || 1;
@@ -59,9 +103,14 @@ export const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workou
     <div className="animate-in fade-in">
        <div className="flex justify-between items-center mb-4">
          <h2 className="text-gray-500 font-bold text-[10px] tracking-[0.2em] uppercase">Analytics</h2>
-         <button onClick={() => {setLogDate(getLocalDate()); setShowDailyCheckin(true);}} className="accent-bg-dim accent-text text-xs font-bold px-3 py-1.5 rounded-lg accent-border-dim border flex items-center gap-2 transition-all active:scale-95">
-           <Edit3 size={12}/> LOG ENTRY
-         </button>
+         <div className="flex gap-2">
+           <button onClick={() => handlePremiumFeature(exportData)} className="bg-gray-800/50 text-gray-400 text-xs font-bold px-3 py-1.5 rounded-lg border border-gray-700/50 flex items-center gap-1 transition-all active:scale-95 hover:text-white">
+             <Download size={12}/> EXPORT {!isPro && <Lock size={9}/>}
+           </button>
+           <button onClick={() => {setLogDate(getLocalDate()); setShowDailyCheckin(true);}} className="accent-bg-dim accent-text text-xs font-bold px-3 py-1.5 rounded-lg accent-border-dim border flex items-center gap-2 transition-all active:scale-95">
+             <Edit3 size={12}/> LOG ENTRY
+           </button>
+         </div>
        </div>
 
        {/* Ghost Report */}
