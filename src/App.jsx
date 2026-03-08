@@ -8,7 +8,7 @@ import { Capacitor } from '@capacitor/core';
 import { Purchases } from '@revenuecat/purchases-capacitor';
 
 import { initializeApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
 
 import { FIREBASE_CONFIG, INITIAL_SPLITS, INITIAL_TARGETS } from './constants';
@@ -178,7 +178,6 @@ export default function App() {
       } else {
         await signInWithEmailAndPassword(auth, email, password);
       }
-      // onAuthStateChanged will handle the rest
     } catch (e) {
       const code = e?.code || '';
       if (code === 'auth/email-already-in-use') setAuthError('Email already in use');
@@ -189,6 +188,61 @@ export default function App() {
       setAuthLoading(false);
     }
   };
+
+  const handleGoogleSignIn = async () => {
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      const auth = getAuth();
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (e) {
+      if (e?.code !== 'auth/popup-closed-by-user') {
+        setAuthError(e?.code === 'auth/unauthorized-domain' ? 'Domain not authorized in Firebase' : 'Google sign-in failed');
+      }
+      setAuthLoading(false);
+    }
+  };
+
+  const handleMagicLink = async (email) => {
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      const auth = getAuth();
+      const actionCodeSettings = {
+        url: window.location.origin + '/?finishSignIn=true',
+        handleCodeInApp: true,
+      };
+      await sendSignInLinkToEmail(auth, email, actionCodeSettings);
+      window.localStorage.setItem('ghostlog_magic_email', email);
+      setAuthError(null);
+      setAuthLoading(false);
+      return true; // signal success to show confirmation
+    } catch (e) {
+      setAuthError('Failed to send magic link: ' + (e?.message || ''));
+      setAuthLoading(false);
+      return false;
+    }
+  };
+
+  // Handle magic link completion on page load
+  useEffect(() => {
+    if (isSignInWithEmailLink(getAuth(), window.location.href)) {
+      let email = window.localStorage.getItem('ghostlog_magic_email');
+      if (!email) {
+        email = window.prompt('Enter your email to confirm sign-in:');
+      }
+      if (email) {
+        signInWithEmailLink(getAuth(), email, window.location.href)
+          .then(() => {
+            window.localStorage.removeItem('ghostlog_magic_email');
+            // Clean URL
+            window.history.replaceState(null, '', window.location.origin);
+          })
+          .catch(e => console.error('Magic link sign-in failed', e));
+      }
+    }
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -331,7 +385,7 @@ export default function App() {
   if (!cloudUser && !authLoading) {
     return (
       <ErrorBoundary>
-        <AuthScreen onAuth={handleAuth} loading={authLoading} error={authError} />
+        <AuthScreen onAuth={handleAuth} onGoogle={handleGoogleSignIn} onMagicLink={handleMagicLink} loading={authLoading} error={authError} />
       </ErrorBoundary>
     );
   }
