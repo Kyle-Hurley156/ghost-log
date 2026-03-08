@@ -34,15 +34,19 @@
       <li>Photos submitted to the AI food scanner (processed in real-time, not stored on our servers)</li>
       <li>Text prompts sent to AI features (Ghost Chef, Ghost Report, food search, target calculator)</li>
     </ul>
+    <p><strong>Account information:</strong></p>
+    <ul>
+      <li>Email address (used for authentication via email/password, Google sign-in, or magic link)</li>
+      <li>Firebase authentication ID (linked to your account)</li>
+    </ul>
     <p><strong>Data collected automatically:</strong></p>
     <ul>
-      <li>Anonymous Firebase authentication ID (no email or name required)</li>
       <li>Device platform (iOS, Android, or web)</li>
       <li>Subscription status via RevenueCat (no payment details are accessible to us)</li>
     </ul>
     <p><strong>Data we do NOT collect:</strong></p>
     <ul>
-      <li>Your name, email address, or phone number (unless you voluntarily link an Apple ID)</li>
+      <li>Your real name or phone number</li>
       <li>Location data</li>
       <li>Contacts, calendar, or other device data</li>
       <li>Credit card or payment information (handled entirely by Apple/Google)</li>
@@ -58,14 +62,14 @@
     <h2>3. Third-Party Services</h2>
     <p>GhostLog uses the following third-party services, each with their own privacy policies:</p>
     <ul>
-      <li><strong>Firebase (Google):</strong> Anonymous authentication and cloud data backup. <a href="https://firebase.google.com/support/privacy">Firebase Privacy</a></li>
+      <li><strong>Firebase (Google):</strong> Authentication (email/password, Google sign-in, magic link) and cloud data sync. <a href="https://firebase.google.com/support/privacy">Firebase Privacy</a></li>
       <li><strong>Google Gemini API:</strong> AI-powered food identification, meal suggestions, and fitness analysis. <a href="https://ai.google.dev/gemini-api/terms">Gemini API Terms</a></li>
       <li><strong>RevenueCat:</strong> Subscription management. <a href="https://www.revenuecat.com/privacy">RevenueCat Privacy</a></li>
       <li><strong>OpenFoodFacts:</strong> Open-source food/barcode database for nutritional lookups. <a href="https://world.openfoodfacts.org/privacy">OpenFoodFacts Privacy</a></li>
     </ul>
 
     <h2>4. Data Storage & Security</h2>
-    <p>Your fitness data is stored primarily on your device using local storage. If cloud backup is active, data is stored in Google Firebase Firestore with security rules restricting access to your anonymous user ID only. All network communication uses HTTPS encryption.</p>
+    <p>Your fitness data is stored locally on your device and automatically synced to Google Firebase Firestore when signed in. Firestore security rules restrict data access to your authenticated user account only. All network communication uses HTTPS encryption.</p>
 
     <h2>5. Data Retention & Deletion</h2>
     <p>Your data remains on your device until you delete the app. Cloud-synced data persists in Firebase until you request deletion. To delete your data:</p>

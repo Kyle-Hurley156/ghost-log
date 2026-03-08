@@ -47,11 +47,11 @@ SMART TARGETS
 DAILY CHECK-IN
 - Log weight, steps, water, sleep, stress, and fatigue daily
 - Beautiful charts track your trends over time
-- All data stays on your device with optional cloud backup
+- All data syncs across your devices automatically
 
-BUILT FOR PRIVACY
-- No account required — anonymous by default
-- Optional iCloud/Firebase backup if you want it
+CLOUD SYNC
+- Sign in with email, Google, or magic link — your choice
+- All data syncs automatically across devices
 - Food photos are processed in real-time, never stored
 - Your data is yours
 
