@@ -154,6 +154,41 @@ export const AddMealModal = ({ isOpen, onClose, onSave, setToast, aiCooldown, se
     setScanning(false);
   };
 
+  // Snap photo of food and send to AI for macro identification
+  const snapPhoto = async () => {
+    if (aiCooldown > 0) { setToast(`Ghost is resting for ${aiCooldown}s`); return; }
+
+    try {
+      const videoEl = document.querySelector('#barcode-reader video');
+      if (!videoEl) { setToast("Camera not ready"); return; }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = videoEl.videoWidth;
+      canvas.height = videoEl.videoHeight;
+      canvas.getContext('2d').drawImage(videoEl, 0, 0);
+      const imageData = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+
+      await stopCamera();
+      setLoading(true);
+
+      const response = await fetch(API_URL, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: `Identify food in image. Return JSON per 100g: {"name":string,"cal":number,"p":number,"c":number,"f":number} ONLY JSON`, isImage: true, imageData })
+      });
+      const data = await response.json();
+      if (!response.ok || !data.candidates) throw new Error("Scan Failed");
+      const result = parseAIResponse(data.candidates[0].content.parts[0].text);
+      setSearchQuery(result.name);
+      setCurrentFood({ name: result.name, cal: result.cal, p: result.p, c: result.c, f: result.f });
+      setSearchSource('Ghost Vision');
+      setAiCooldown(5);
+    } catch (e) {
+      setToast("Scan Error: " + e.message);
+      setAiCooldown(3);
+    }
+    setLoading(false);
+  };
+
   const addIngredient = () => {
     const name = currentFood.name || searchQuery || "Food";
     if (name && weight) {
@@ -210,8 +245,13 @@ export const AddMealModal = ({ isOpen, onClose, onSave, setToast, aiCooldown, se
           {scanning ? (
             <div className="flex-1 flex flex-col">
               <div id="barcode-reader" className="rounded-xl overflow-hidden flex-1" style={{ width: '100%' }}></div>
-              <p className="text-center text-[10px] text-gray-600 mt-1 mb-1">Point at a barcode — auto-scans</p>
-              <button onClick={stopCamera} className="w-full bg-red-500/10 text-red-400 text-xs font-bold py-2.5 rounded-xl border border-red-500/20">CANCEL</button>
+              <p className="text-center text-[10px] text-gray-600 mt-1 mb-1">Barcodes auto-scan — or snap food for AI</p>
+              <div className="flex gap-2">
+                <button onClick={snapPhoto} disabled={aiCooldown > 0} className="flex-1 accent-bg-dim accent-text text-xs font-bold py-2.5 rounded-xl accent-border-dim border flex items-center justify-center gap-1 disabled:opacity-50 active:scale-95">
+                  <Sparkles size={12}/> SNAP FOR AI
+                </button>
+                <button onClick={stopCamera} className="flex-1 bg-red-500/10 text-red-400 text-xs font-bold py-2.5 rounded-xl border border-red-500/20">CANCEL</button>
+              </div>
             </div>
           ) : (
             <div className="flex flex-col flex-1">
