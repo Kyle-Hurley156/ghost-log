@@ -18,3 +18,10 @@ ios/App/App.xcworkspace/xcuserdata/
 
 # Capacitor Temp
 capacitor.config.json.timestamp
+
+# App Store Connect API keys
+.private_keys/
+
+# Signing keystores
+*.jks
+*.jks.b64
