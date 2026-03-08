@@ -87,53 +87,77 @@ export const AddMealModal = ({ isOpen, onClose, onSave, setToast, aiCooldown, se
 
   // --- COMBINED CAMERA: barcode scanning + photo snap for AI ---
   const startCamera = async () => {
-    setScanning(true);
+    // First request camera permission explicitly — this triggers the native popup
     try {
-      const html5QrCode = new Html5Qrcode("barcode-reader");
-      scannerRef.current = html5QrCode;
-
-      await html5QrCode.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 250, height: 100 }, aspectRatio: 1.0 },
-        async (decodedText) => {
-          // Barcode detected — stop scanner and look up
-          await html5QrCode.stop();
-          scannerRef.current = null;
-          setScanning(false);
-          setLoading(true);
-
-          try {
-            const product = await lookupBarcode(decodedText);
-            if (product) {
-              setCurrentFood({ name: product.name, cal: product.cal, p: product.p, c: product.c, f: product.f });
-              setSearchQuery(product.brand ? `${product.name} (${product.brand})` : product.name);
-              setSearchSource('Barcode');
-              setToast(`Found: ${product.name}`);
-            } else {
-              setToast("Product not in database. Try text search.");
-            }
-          } catch (e) {
-            setToast("Barcode lookup failed");
-          }
-          setLoading(false);
-        },
-        () => {} // ignore scan errors (no barcode in frame)
-      );
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      // Permission granted — stop the stream, Html5Qrcode will start its own
+      stream.getTracks().forEach(t => t.stop());
     } catch (e) {
-      console.error("Camera error:", e);
-      const msg = e?.message || String(e);
+      console.error("Camera permission error:", e);
+      const msg = e?.name || e?.message || String(e);
       if (msg.includes("NotAllowedError") || msg.includes("Permission")) {
         setToast("Camera blocked — check browser/app settings");
-      } else if (msg.includes("NotFoundError") || msg.includes("no camera")) {
+      } else if (msg.includes("NotFoundError")) {
         setToast("No camera found on this device");
-      } else if (msg.includes("NotReadableError") || msg.includes("in use")) {
+      } else if (msg.includes("NotReadableError")) {
         setToast("Camera is in use by another app");
       } else {
         setToast("Camera error: " + msg);
       }
-      setScanning(false);
+      return;
     }
+
+    // Set scanning to render the barcode-reader div
+    setScanning(true);
   };
+
+  // Once scanning is true and the DOM element exists, start the scanner
+  useEffect(() => {
+    if (!scanning || scannerRef.current) return;
+
+    const initScanner = async () => {
+      try {
+        const html5QrCode = new Html5Qrcode("barcode-reader");
+        scannerRef.current = html5QrCode;
+
+        await html5QrCode.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: { width: 250, height: 100 }, aspectRatio: 1.0 },
+          async (decodedText) => {
+            // Barcode detected — stop scanner and look up
+            await html5QrCode.stop();
+            scannerRef.current = null;
+            setScanning(false);
+            setLoading(true);
+
+            try {
+              const product = await lookupBarcode(decodedText);
+              if (product) {
+                setCurrentFood({ name: product.name, cal: product.cal, p: product.p, c: product.c, f: product.f });
+                setSearchQuery(product.brand ? `${product.name} (${product.brand})` : product.name);
+                setSearchSource('Barcode');
+                setToast(`Found: ${product.name}`);
+              } else {
+                setToast("Product not in database. Try text search.");
+              }
+            } catch (e) {
+              setToast("Barcode lookup failed");
+            }
+            setLoading(false);
+          },
+          () => {} // ignore scan errors (no barcode in frame)
+        );
+      } catch (e) {
+        console.error("Scanner start error:", e);
+        setToast("Camera error: " + (e?.message || String(e)));
+        setScanning(false);
+      }
+    };
+
+    // Small delay to ensure React has rendered the DOM element
+    const timer = setTimeout(initScanner, 100);
+    return () => clearTimeout(timer);
+  }, [scanning]);
 
   const stopCamera = async () => {
     if (scannerRef.current) {
