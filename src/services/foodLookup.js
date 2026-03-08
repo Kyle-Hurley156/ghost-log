@@ -1,5 +1,7 @@
-const OFF_SEARCH_URL = 'https://world.openfoodfacts.org/cgi/search.pl';
-const OFF_BARCODE_URL = 'https://world.openfoodfacts.org/api/v2/product';
+// Regional first (Australia), fallback to world database
+const OFF_REGIONAL_BASE = 'https://au.openfoodfacts.org';
+const OFF_WORLD_BASE = 'https://world.openfoodfacts.org';
+const USER_AGENT = 'GhostLog/3.1 (ghostlog.app)';
 
 function extractMacros(product) {
   const n = product.nutriments || {};
@@ -15,7 +17,7 @@ function extractMacros(product) {
   };
 }
 
-// Search by food name — returns array of results
+// Search by food name — tries AU region first, falls back to world
 export async function searchFood(query) {
   const params = new URLSearchParams({
     search_terms: query,
@@ -23,33 +25,50 @@ export async function searchFood(query) {
     action: 'process',
     json: 1,
     page_size: 8,
-    fields: 'product_name,brands,generic_name,nutriments,serving_size',
+    fields: 'product_name,brands,generic_name,nutriments,serving_size,countries_tags',
   });
 
-  const response = await fetch(`${OFF_SEARCH_URL}?${params}`, {
-    headers: { 'User-Agent': 'GhostLog/3.1 (ghostlog.app)' },
-  });
+  // Try regional first
+  for (const base of [OFF_REGIONAL_BASE, OFF_WORLD_BASE]) {
+    try {
+      const response = await fetch(`${base}/cgi/search.pl?${params}`, {
+        headers: { 'User-Agent': USER_AGENT },
+      });
+      if (!response.ok) continue;
+      const data = await response.json();
 
-  if (!response.ok) throw new Error('OpenFoodFacts search failed');
-  const data = await response.json();
+      if (!data.products || data.products.length === 0) continue;
 
-  if (!data.products || data.products.length === 0) return [];
+      const results = data.products
+        .filter(p => p.nutriments && (p.nutriments['energy-kcal_100g'] || p.nutriments['energy-kcal']))
+        .map(extractMacros);
 
-  return data.products
-    .filter(p => p.nutriments && (p.nutriments['energy-kcal_100g'] || p.nutriments['energy-kcal']))
-    .map(extractMacros);
+      if (results.length > 0) return results;
+    } catch (e) {
+      console.warn(`Search failed on ${base}`, e);
+    }
+  }
+
+  return [];
 }
 
-// Lookup by barcode — returns single result or null
+// Lookup by barcode — tries AU region first, falls back to world
 export async function lookupBarcode(barcode) {
-  const response = await fetch(`${OFF_BARCODE_URL}/${barcode}.json`, {
-    headers: { 'User-Agent': 'GhostLog/3.1 (ghostlog.app)' },
-  });
+  for (const base of [OFF_REGIONAL_BASE, OFF_WORLD_BASE]) {
+    try {
+      const response = await fetch(`${base}/api/v2/product/${barcode}.json`, {
+        headers: { 'User-Agent': USER_AGENT },
+      });
+      if (!response.ok) continue;
+      const data = await response.json();
 
-  if (!response.ok) return null;
-  const data = await response.json();
+      if (data.status === 1 && data.product) {
+        return extractMacros(data.product);
+      }
+    } catch (e) {
+      console.warn(`Barcode lookup failed on ${base}`, e);
+    }
+  }
 
-  if (data.status !== 1 || !data.product) return null;
-
-  return extractMacros(data.product);
+  return null;
 }
