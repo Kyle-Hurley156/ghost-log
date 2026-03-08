@@ -49,7 +49,7 @@ jobs:
         run: |
           cd android/app
           sed -i "s/versionCode 1/versionCode ${{ github.run_number }}/" build.gradle
-          sed -i "s/versionName \"1.0\"/versionName \"1.2.${{ github.run_number }}\"/" build.gradle
+          sed -i "s/versionName \"1.0\"/versionName \"4.0.${{ github.run_number }}\"/" build.gradle
 
       - name: Decode Keystore
         env:

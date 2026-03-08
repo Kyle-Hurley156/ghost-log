@@ -50,10 +50,12 @@ jobs:
       - name: Configure iOS Settings (Version & Compliance)
         run: |
           cd ios/App/App
-          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 1.2" Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 4.0" Info.plist
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ github.run_number }}" Info.plist
           /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" Info.plist || /usr/libexec/PlistBuddy -c "Set :ITSAppUsesNonExemptEncryption false" Info.plist
           /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string 'GhostLog uses your camera to scan food labels and meals for macro tracking.'" Info.plist || /usr/libexec/PlistBuddy -c "Set :NSCameraUsageDescription 'GhostLog uses your camera to scan food labels and meals for macro tracking.'" Info.plist
+          /usr/libexec/PlistBuddy -c "Add :NSHealthShareUsageDescription string 'GhostLog reads steps, weight and sleep from Apple Health to auto-fill your daily log.'" Info.plist || /usr/libexec/PlistBuddy -c "Set :NSHealthShareUsageDescription 'GhostLog reads steps, weight and sleep from Apple Health to auto-fill your daily log.'" Info.plist
+          /usr/libexec/PlistBuddy -c "Add :NSHealthUpdateUsageDescription string 'GhostLog can write workout data to Apple Health.'" Info.plist || /usr/libexec/PlistBuddy -c "Set :NSHealthUpdateUsageDescription 'GhostLog can write workout data to Apple Health.'" Info.plist
 
       - name: Create ExportOptions.plist
         run: |
@@ -112,6 +114,21 @@ jobs:
           sed -i '' "s/CODE_SIGN_STYLE = .*/CODE_SIGN_STYLE = Automatic;/g" Pods/Pods.xcodeproj/project.pbxproj
           sed -i '' "s/PROVISIONING_PROFILE_SPECIFIER = .*/PROVISIONING_PROFILE_SPECIFIER = \"\";/g" Pods/Pods.xcodeproj/project.pbxproj
           sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER = com.ghostlog.app;/PRODUCT_BUNDLE_IDENTIFIER = com.ghostlog.app; PROVISIONING_PROFILE_SPECIFIER = "GhostLog App Store"; CODE_SIGN_STYLE = Manual; DEVELOPMENT_TEAM = 2H8G9ZY6PP;/g' App.xcodeproj/project.pbxproj
+
+      - name: Add HealthKit Entitlement
+        run: |
+          cat <<ENTEOF > ios/App/App/App.entitlements
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>com.apple.developer.healthkit</key>
+            <true/>
+            <key>com.apple.developer.healthkit.access</key>
+            <array/>
+          </dict>
+          </plist>
+          ENTEOF
 
       - name: Build Archive
         run: |

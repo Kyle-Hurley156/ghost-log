@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Dumbbell, Utensils, BarChart3, Lock, Cloud, CloudOff, Loader2,
+  Dumbbell, Utensils, BarChart3, Lock, Cloud, CloudOff, Loader2, Settings,
   TrendingUp, Footprints, BrainCircuit, Battery, Flame, Beef, Wheat, Droplet
 } from 'lucide-react';
 
@@ -15,7 +15,10 @@ import { FIREBASE_CONFIG, INITIAL_SPLITS, INITIAL_TARGETS } from './constants';
 import { getLocalDate, useStickyState } from './helpers';
 
 import { AuthScreen } from './components/AuthScreen';
+import { OnboardingModal } from './components/OnboardingModal';
+import { SettingsPanel } from './components/SettingsPanel';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { hapticSelection, hapticSuccess, hapticMedium } from './services/haptics';
 import { Toast } from './components/Toast';
 import { ConfirmModal } from './components/ConfirmModal';
 import { PaywallModal } from './components/PaywallModal';
@@ -57,6 +60,8 @@ export default function App() {
   const [phase, setPhase] = useStickyState('CUT', 'ghost_phase');
 
   // UI States
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [showDailyCheckin, setShowDailyCheckin] = useState(false);
   const [showGhostPanel, setShowGhostPanel] = useState(false);
   const [showTargetModal, setShowTargetModal] = useState(false);
@@ -263,7 +268,36 @@ export default function App() {
 
   // Cooldown & Startup Modals
   useEffect(() => { if (aiCooldown > 0) { const timer = setTimeout(() => setAiCooldown(c => c - 1), 1000); return () => clearTimeout(timer); } }, [aiCooldown]);
-  useEffect(() => { const today = getLocalDate(); if (!statsHistory.some(entry => entry.date === today)) { setLogDate(today); setShowDailyCheckin(true); } }, []);
+  useEffect(() => {
+    if (!dataLoaded) return;
+    const today = getLocalDate();
+    // Show onboarding for brand new users (no workout history and no stats)
+    if (workoutHistory.length === 0 && statsHistory.length === 0) {
+      setShowOnboarding(true);
+    } else if (!statsHistory.some(entry => entry.date === today)) {
+      setLogDate(today);
+      setShowDailyCheckin(true);
+    }
+  }, [dataLoaded]);
+
+  // Calculate workout streak
+  const workoutStreak = React.useMemo(() => {
+    if (!workoutHistory.length) return 0;
+    const dates = [...new Set(workoutHistory.map(w => w.date))].sort().reverse();
+    let streak = 0;
+    const today = getLocalDate();
+    const checkDate = new Date(today);
+    for (let i = 0; i < 365; i++) {
+      const dateStr = checkDate.toISOString().split('T')[0];
+      if (dates.includes(dateStr)) {
+        streak++;
+      } else if (i > 0) {
+        break; // streak broken
+      }
+      checkDate.setDate(checkDate.getDate() - 1);
+    }
+    return streak;
+  }, [workoutHistory]);
 
   const dragItem = useRef(null);
   const dragOverItem = useRef(null);
@@ -317,6 +351,10 @@ export default function App() {
         {toastMsg && <Toast message={toastMsg} onClose={() => setToastMsg(null)} />}
         <ConfirmModal isOpen={confirmState.isOpen} message={confirmState.message} onConfirm={confirmState.onConfirm} onCancel={() => setConfirmState({isOpen:false, message:'', onConfirm:null})} />
 
+        {showOnboarding && <OnboardingModal onComplete={() => { setShowOnboarding(false); setLogDate(getLocalDate()); setShowDailyCheckin(true); }} setPhase={setPhase} setUserTargets={setUserTargets} userTargets={userTargets} />}
+
+        <SettingsPanel show={showSettings} onClose={() => setShowSettings(false)} onLogout={handleLogout} userEmail={cloudUser?.email} requestConfirm={requestConfirm} />
+
         <DailyCheckinModal isOpen={showDailyCheckin} onClose={()=>setShowDailyCheckin(false)} stats={dailyStatsInput} setStats={setDailyStatsInput} onSave={submitDailyLog} date={logDate} setDate={setLogDate}/>
 
         <AddMealModal isOpen={showAddMealModal} onClose={()=>setShowAddMealModal(false)} onSave={(m)=>setSavedMeals([...savedMeals, m])} setToast={setToastMsg} aiCooldown={aiCooldown} setAiCooldown={setAiCooldown} />
@@ -365,12 +403,17 @@ export default function App() {
                   {cloudStatus === 'synced' ? <Cloud size={11} className="accent-text"/> : cloudStatus === 'syncing' ? <Loader2 size={11} className="animate-spin text-gray-400"/> : <CloudOff size={11} className="text-red-400"/>}
                   {cloudStatus === 'synced' ? 'Synced' : cloudStatus === 'syncing' ? 'Syncing...' : 'Local'}
                 </div>
-                <button onClick={handleLogout} className="text-[10px] font-bold text-gray-500 hover:text-white flex items-center gap-1 bg-gray-800/50 px-2 py-0.5 rounded-md border border-gray-700/50 transition-colors">
-                  Logout
-                </button>
+                {workoutStreak > 0 && (
+                  <span className="text-[10px] font-bold text-orange-400 flex items-center gap-0.5 bg-orange-500/10 px-2 py-0.5 rounded-md border border-orange-500/20">
+                    🔥 {workoutStreak}
+                  </span>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <button onClick={() => setShowSettings(true)} className="p-1.5 rounded-lg hover:bg-gray-800 transition-colors">
+                <Settings size={16} className="text-gray-500"/>
+              </button>
               <button onClick={()=>handlePremiumFeature(() => setShowTargetModal(true))} className={`text-xs font-bold px-3 py-1.5 rounded-full border flex items-center gap-1 transition-all ${phase==='CUT'?'text-red-400 border-red-500/30 bg-red-500/5': phase==='BULK' ? 'text-green-400 border-green-500/30 bg-green-500/5' : 'accent-text accent-border-dim accent-bg-dim'}`}>
                     {phase} {!isPro && <Lock size={10} className="ml-1 opacity-50"/>}
               </button>
@@ -413,7 +456,7 @@ export default function App() {
               { id: 'eat', icon: Utensils, label: 'EAT' },
               { id: 'stats', icon: BarChart3, label: 'STATS' },
             ].map(tab => (
-              <button key={tab.id} onClick={()=>setActiveTab(tab.id)}
+              <button key={tab.id} onClick={()=>{ setActiveTab(tab.id); hapticSelection(); }}
                 className={`p-2 rounded-xl flex flex-col items-center gap-1 transition-all ${activeTab===tab.id ? 'accent-text' : 'text-gray-600'}`}>
                 <tab.icon size={22} strokeWidth={activeTab===tab.id ? 2.5 : 1.5}/>
                 <span className={`text-[9px] font-bold tracking-wider ${activeTab===tab.id ? '' : 'text-gray-600'}`}>{tab.label}</span>

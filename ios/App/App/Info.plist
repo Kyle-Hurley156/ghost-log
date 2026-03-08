@@ -47,5 +47,9 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>GhostLog uses the camera to scan barcodes and identify food for macro tracking.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>GhostLog reads steps, weight and sleep from Apple Health to auto-fill your daily log.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>GhostLog can write workout data to Apple Health.</string>
 </dict>
 </plist>

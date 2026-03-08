@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Check, X, Edit3, Trash2, GripVertical, Sparkles, AlertTriangle, Activity, HeartPulse, Dumbbell } from 'lucide-react';
 import { calculateReadiness, calculateSetTarget, getLocalDate } from '../helpers';
 import { ExerciseSearchInput } from './ExerciseSearchInput';
+import { hapticLight, hapticSuccess } from '../services/haptics';
 
 export const TrainTab = ({
   workoutSplits, setWorkoutSplits, workoutHistory, setWorkoutHistory,
@@ -81,12 +82,13 @@ export const TrainTab = ({
       }
     }
     setActiveSession(null); setMode('SPLIT_SELECT');
+    hapticSuccess();
   };
 
   const cancelSession = () => { requestConfirm("Quit workout?", () => { setActiveSession(null); setMode('SPLIT_SELECT'); }); };
   const removeExerciseFromSession = (exIndex) => { requestConfirm("Remove exercise?", () => { const newExs = [...activeSession.exercises]; newExs.splice(exIndex, 1); setActiveSession({ ...activeSession, exercises: newExs }); }); };
   const updateSet = (exIdx, setIdx, field, value) => { const n = [...activeSession.exercises]; n[exIdx].sets[setIdx][field] = value; setActiveSession({...activeSession, exercises: n}); };
-  const toggleSetComplete = (exIdx, setIdx) => { const n = [...activeSession.exercises]; n[exIdx].sets[setIdx].done = !n[exIdx].sets[setIdx].done; setActiveSession({...activeSession, exercises: n}); };
+  const toggleSetComplete = (exIdx, setIdx) => { const n = [...activeSession.exercises]; n[exIdx].sets[setIdx].done = !n[exIdx].sets[setIdx].done; setActiveSession({...activeSession, exercises: n}); if (n[exIdx].sets[setIdx].done) hapticLight(); };
   const addSet = (exIdx) => { const n = [...activeSession.exercises]; n[exIdx].sets.push({weight:'',reps:'',done:false,target:{}}); setActiveSession({...activeSession, exercises: n}); };
   const removeSet = (exIdx, setIdx) => { const n = [...activeSession.exercises]; n[exIdx].sets.splice(setIdx, 1); setActiveSession({...activeSession, exercises: n}); };
 
