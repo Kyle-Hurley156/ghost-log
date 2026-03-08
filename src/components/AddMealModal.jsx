@@ -120,7 +120,17 @@ export const AddMealModal = ({ isOpen, onClose, onSave, setToast, aiCooldown, se
         () => {} // ignore scan errors (no barcode in frame)
       );
     } catch (e) {
-      setToast("Camera access denied");
+      console.error("Camera error:", e);
+      const msg = e?.message || String(e);
+      if (msg.includes("NotAllowedError") || msg.includes("Permission")) {
+        setToast("Camera blocked — check browser/app settings");
+      } else if (msg.includes("NotFoundError") || msg.includes("no camera")) {
+        setToast("No camera found on this device");
+      } else if (msg.includes("NotReadableError") || msg.includes("in use")) {
+        setToast("Camera is in use by another app");
+      } else {
+        setToast("Camera error: " + msg);
+      }
       setScanning(false);
     }
   };
