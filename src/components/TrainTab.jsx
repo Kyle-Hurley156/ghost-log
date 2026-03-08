@@ -6,7 +6,8 @@ import { ExerciseSearchInput } from './ExerciseSearchInput';
 export const TrainTab = ({
   workoutSplits, setWorkoutSplits, workoutHistory, setWorkoutHistory,
   workoutEditMode, setWorkoutEditMode, addSplit, deleteSplit, renameSplit, handleSortSplits,
-  dragItem, dragOverItem, phase, dailyStats, requestConfirm, setShowCardioModal
+  dragItem, dragOverItem, phase, dailyStats, requestConfirm, setShowCardioModal,
+  customExercises, onCreateExercise
 }) => {
   const [mode, setMode] = useState('SPLIT_SELECT');
   const [activeSession, setActiveSession] = useState(null);
@@ -146,7 +147,7 @@ export const TrainTab = ({
             <button onClick={(e) => {e.stopPropagation(); deleteExerciseFromTemplate(i);}} className="text-red-400"><Trash2 size={16}/></button>
           </div>
         ))}</div>
-        <ExerciseSearchInput onAdd={addExerciseToTemplate} />
+        <ExerciseSearchInput onAdd={addExerciseToTemplate} customExercises={customExercises} onCreateExercise={onCreateExercise} />
       </div>
     );
   }
@@ -183,7 +184,7 @@ export const TrainTab = ({
           </div>
         </div>
       ))}
-      <ExerciseSearchInput onAdd={addExerciseToSession} />
+      <ExerciseSearchInput onAdd={addExerciseToSession} customExercises={customExercises} onCreateExercise={onCreateExercise} />
       <button onClick={finishWorkout} className="w-full accent-bg hover:opacity-90 text-white font-bold py-4 rounded-xl text-base uppercase tracking-wider mt-6 transition-all active:scale-[0.98] accent-glow">FINISH WORKOUT</button>
     </div>
   );

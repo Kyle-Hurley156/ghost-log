@@ -1,7 +1,32 @@
-import React from 'react';
-import { Scale, Footprints, Droplets, Zap, Moon, Activity, Calendar, Save } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Scale, Footprints, Droplets, Zap, Moon, Activity, Calendar, Save, Heart, Loader2 } from 'lucide-react';
+import { isHealthAvailable, requestHealthPermissions, readTodayHealthData } from '../services/healthSync';
 
 export const DailyCheckinModal = ({ isOpen, onClose, stats, setStats, onSave, date, setDate }) => {
+  const [healthSyncing, setHealthSyncing] = useState(false);
+  const [healthConnected, setHealthConnected] = useState(false);
+
+  // Auto-sync health data when modal opens on native
+  useEffect(() => {
+    if (!isOpen || !isHealthAvailable()) return;
+    const syncHealth = async () => {
+      setHealthSyncing(true);
+      const granted = await requestHealthPermissions();
+      if (granted) {
+        setHealthConnected(true);
+        const data = await readTodayHealthData();
+        setStats(prev => ({
+          ...prev,
+          ...(data.steps != null && !prev.steps ? { steps: data.steps } : {}),
+          ...(data.weight != null && !prev.weight ? { weight: data.weight } : {}),
+          ...(data.sleep != null && !prev.sleepHours ? { sleepHours: data.sleep } : {}),
+        }));
+      }
+      setHealthSyncing(false);
+    };
+    syncHealth();
+  }, [isOpen]);
+
   if (!isOpen) return null;
   const getStressLabel = (val) => ['Zen', 'Chill', 'Normal', 'Spicy', 'INTERNAL SCREAMING'][val - 1] || 'Normal';
   const getFatigueLabel = (val) => ['Fresh', 'Good', 'Meh', 'Heavy', 'WRECKED'][val - 1] || 'Meh';
@@ -12,7 +37,11 @@ export const DailyCheckinModal = ({ isOpen, onClose, stats, setStats, onSave, da
       <div className="bg-gray-900 w-full max-w-sm rounded-2xl p-6 border border-gray-800/50 shadow-2xl relative max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between mb-4 sticky top-0 bg-gray-900 z-10 pb-2">
           <div><h2 className="text-xl font-black tracking-tight text-white">DAILY LOG</h2><p className="text-[10px] text-gray-600 uppercase tracking-widest">Keep the streak.</p></div>
-          <button onClick={onClose} className="text-[10px] font-bold text-gray-600 border border-gray-800/50 px-2 py-1 rounded-lg hover:text-white transition-colors">SKIP</button>
+          <div className="flex items-center gap-2">
+            {healthSyncing && <span className="text-[9px] text-gray-500 flex items-center gap-1"><Loader2 size={10} className="animate-spin"/> Syncing...</span>}
+            {healthConnected && !healthSyncing && <span className="text-[9px] text-green-400 flex items-center gap-1"><Heart size={10}/> Health</span>}
+            <button onClick={onClose} className="text-[10px] font-bold text-gray-600 border border-gray-800/50 px-2 py-1 rounded-lg hover:text-white transition-colors">SKIP</button>
+          </div>
         </div>
         <div className="space-y-4">
            <div className="bg-black/30 p-3 rounded-xl border border-gray-800/50 flex justify-between items-center"><span className="text-gray-400 text-sm font-bold flex gap-2"><Calendar size={16}/> Date</span><input type="date" value={date} onChange={e => setDate(e.target.value)} className="bg-gray-800 text-white text-sm outline-none rounded-lg px-2 py-1"/></div>

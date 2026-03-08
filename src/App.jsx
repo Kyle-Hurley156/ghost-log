@@ -85,6 +85,7 @@ export default function App() {
   const [workoutHistory, setWorkoutHistory] = useStickyState([], 'ghost_workouts');
   const [dailyLog, setDailyLog] = useStickyState([], 'ghost_daily_log');
   const [userTargets, setUserTargets] = useStickyState(INITIAL_TARGETS, 'ghost_targets');
+  const [customExercises, setCustomExercises] = useStickyState([], 'ghost_custom_exercises');
 
   const [logDate, setLogDate] = useState(getLocalDate());
   const [dailyStatsInput, setDailyStatsInput] = useState({ weight: '', steps: '', water: '', stress: 3, fatigue: 3, sleepHours: '', sleepQuality: 3, activity: 3 });
@@ -109,6 +110,7 @@ export default function App() {
         if (data.dailyLog) setDailyLog(data.dailyLog);
         if (data.userTargets) setUserTargets(data.userTargets);
         if (data.phase) setPhase(data.phase);
+        if (data.customExercises) setCustomExercises(data.customExercises);
       }
     } catch (e) {
       console.error("Failed to load cloud data", e);
@@ -209,6 +211,7 @@ export default function App() {
           workoutHistory,
           dailyLog,
           userTargets,
+          customExercises,
           phase
         }, { merge: true });
 
@@ -221,7 +224,7 @@ export default function App() {
 
     const timer = setTimeout(syncDataToCloud, 3000);
     return () => clearTimeout(timer);
-  }, [workoutSplits, savedMeals, statsHistory, workoutHistory, dailyLog, userTargets, phase, cloudUser, dataLoaded]);
+  }, [workoutSplits, savedMeals, statsHistory, workoutHistory, dailyLog, userTargets, customExercises, phase, cloudUser, dataLoaded]);
 
   // --- PREMIUM LOCK GUARDS ---
   const handlePremiumFeature = (action) => {
@@ -337,7 +340,7 @@ export default function App() {
            setToastMsg("Cardio Logged");
         }} />
 
-        <GhostAiPanel show={showGhostPanel} onClose={()=>setShowGhostPanel(false)}/>
+        <GhostAiPanel show={showGhostPanel} onClose={()=>setShowGhostPanel(false)} workoutHistory={workoutHistory} setToast={setToastMsg}/>
 
         {/* Floating Ghost AI Button */}
         {!showGhostPanel && !showDailyCheckin && !showAddMealModal && !showTargetModal && !showGhostChefModal && !showCardioModal && !showPaywall && (
@@ -395,7 +398,7 @@ export default function App() {
 
         {/* MAIN CONTENT AREA */}
         <div className="pt-48 pb-32">
-           {activeTab === 'train' && <div className="p-4"><TrainTab workoutSplits={workoutSplits} setWorkoutSplits={setWorkoutSplits} workoutHistory={workoutHistory} setWorkoutHistory={setWorkoutHistory} workoutEditMode={workoutEditMode} setWorkoutEditMode={setWorkoutEditMode} addSplit={addSplit} deleteSplit={deleteSplit} renameSplit={renameSplit} handleSortSplits={handleSortSplits} dragItem={dragItem} dragOverItem={dragOverItem} phase={phase} dailyStats={dailyStatsInput} requestConfirm={requestConfirm} setShowCardioModal={setShowCardioModal}/></div>}
+           {activeTab === 'train' && <div className="p-4"><TrainTab workoutSplits={workoutSplits} setWorkoutSplits={setWorkoutSplits} workoutHistory={workoutHistory} setWorkoutHistory={setWorkoutHistory} workoutEditMode={workoutEditMode} setWorkoutEditMode={setWorkoutEditMode} addSplit={addSplit} deleteSplit={deleteSplit} renameSplit={renameSplit} handleSortSplits={handleSortSplits} dragItem={dragItem} dragOverItem={dragOverItem} phase={phase} dailyStats={dailyStatsInput} requestConfirm={requestConfirm} setShowCardioModal={setShowCardioModal} customExercises={customExercises} onCreateExercise={(name) => setCustomExercises(prev => [...new Set([...prev, name])])}/></div>}
 
            {activeTab === 'eat' && <div className="p-4"><EatTab savedMeals={savedMeals} dailyLog={dailyLog} mealEditMode={mealEditMode} setMealEditMode={setMealEditMode} setShowAddMealModal={setShowAddMealModal} setShowGhostChefModal={setShowGhostChefModal} logMeal={logMeal} deleteSavedMeal={deleteSavedMeal} deleteLogItem={deleteLogItem} getMealMacros={(m)=>m.ingredients.reduce((a,i)=>({cal:a.cal+i.cal,p:a.p+i.p,c:a.c+i.c,f:a.f+i.f}),{cal:0,p:0,c:0,f:0})} dragItem={dragItem} dragOverItem={dragOverItem} handleSortMeals={handleSortMeals} requestConfirm={requestConfirm} userTargets={currentTargets} dailyStats={dailyStatsInput} isPro={isPro} handlePremiumFeature={handlePremiumFeature}/></div>}
 
