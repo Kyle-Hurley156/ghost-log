@@ -73,13 +73,6 @@ export function useStickyState(defaultValue, key) {
   const [value, setValue] = useState(() => {
     try {
       const stickyValue = window.localStorage.getItem(key);
-      const version = window.localStorage.getItem("GL_VERSION");
-
-      if (version !== APP_VERSION) {
-        window.localStorage.setItem("GL_VERSION", APP_VERSION);
-        return defaultValue;
-      }
-
       if (stickyValue !== null) {
         const parsed = JSON.parse(stickyValue);
         if (Array.isArray(defaultValue) && !Array.isArray(parsed)) return defaultValue;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Dumbbell, Utensils, BarChart3, Lock, Cloud, CloudOff, Loader2, Apple,
+  Dumbbell, Utensils, BarChart3, Lock, Cloud, CloudOff, Loader2,
   TrendingUp, Footprints, BrainCircuit, Battery, Flame, Beef, Wheat, Droplet
 } from 'lucide-react';
 
@@ -8,12 +8,13 @@ import { Capacitor } from '@capacitor/core';
 import { Purchases } from '@revenuecat/purchases-capacitor';
 
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, linkWithPopup, OAuthProvider } from 'firebase/auth';
-import { getFirestore, doc, setDoc } from 'firebase/firestore';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
 
 import { FIREBASE_CONFIG, INITIAL_SPLITS, INITIAL_TARGETS } from './constants';
 import { getLocalDate, useStickyState } from './helpers';
 
+import { AuthScreen } from './components/AuthScreen';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Toast } from './components/Toast';
 import { ConfirmModal } from './components/ConfirmModal';
@@ -71,7 +72,9 @@ export default function App() {
   const [isPaywallLoading, setIsPaywallLoading] = useState(false);
   const [cloudUser, setCloudUser] = useState(null);
   const [cloudStatus, setCloudStatus] = useState('disconnected');
-  const appleProvider = new OAuthProvider('apple.com');
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState(null);
+  const [dataLoaded, setDataLoaded] = useState(false);
 
   // APP DATA
   const [workoutEditMode, setWorkoutEditMode] = useState(false);
@@ -85,6 +88,33 @@ export default function App() {
 
   const [logDate, setLogDate] = useState(getLocalDate());
   const [dailyStatsInput, setDailyStatsInput] = useState({ weight: '', steps: '', water: '', stress: 3, fatigue: 3, sleepHours: '', sleepQuality: 3, activity: 3 });
+
+  // --- FIREBASE HELPER: get user doc ref ---
+  const getUserRef = (uid) => {
+    const db = getFirestore();
+    const appId = import.meta.env?.VITE_FIREBASE_APP_ID || 'ghostlog-local';
+    return doc(db, 'artifacts', appId, 'users', uid, 'userData', 'backup');
+  };
+
+  // --- PULL DATA FROM CLOUD ---
+  const loadCloudData = async (uid) => {
+    try {
+      const snapshot = await getDoc(getUserRef(uid));
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (data.workoutSplits) setWorkoutSplits(data.workoutSplits);
+        if (data.savedMeals) setSavedMeals(data.savedMeals);
+        if (data.statsHistory) setStatsHistory(data.statsHistory);
+        if (data.workoutHistory) setWorkoutHistory(data.workoutHistory);
+        if (data.dailyLog) setDailyLog(data.dailyLog);
+        if (data.userTargets) setUserTargets(data.userTargets);
+        if (data.phase) setPhase(data.phase);
+      }
+    } catch (e) {
+      console.error("Failed to load cloud data", e);
+    }
+    setDataLoaded(true);
+  };
 
   // --- INITIALIZATION (FIREBASE & REVENUECAT) ---
   useEffect(() => {
@@ -107,38 +137,77 @@ export default function App() {
       try {
         const app = initializeApp(FIREBASE_CONFIG);
         const auth = getAuth(app);
-        signInAnonymously(auth).catch(e => console.warn("Firebase Auth Error", e));
 
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
+        const unsubscribe = onAuthStateChanged(auth, async (user) => {
           if (user) {
             setCloudUser(user);
             setCloudStatus('synced');
+            await loadCloudData(user.uid);
           } else {
+            setCloudUser(null);
             setCloudStatus('disconnected');
+            setDataLoaded(false);
           }
+          setAuthLoading(false);
         });
         return () => unsubscribe();
-      } catch (e) { console.error("Firebase Init Failed", e); }
+      } catch (e) {
+        console.error("Firebase Init Failed", e);
+        setAuthLoading(false);
+      }
+    } else {
+      setAuthLoading(false);
     }
   }, []);
 
-  // --- CLOUD SYNC ENGINE ---
+  // --- AUTH HANDLERS ---
+  const handleAuth = async (email, password, isSignUp) => {
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      const auth = getAuth();
+      if (isSignUp) {
+        await createUserWithEmailAndPassword(auth, email, password);
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+      }
+      // onAuthStateChanged will handle the rest
+    } catch (e) {
+      const code = e?.code || '';
+      if (code === 'auth/email-already-in-use') setAuthError('Email already in use');
+      else if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') setAuthError('Invalid email or password');
+      else if (code === 'auth/weak-password') setAuthError('Password must be at least 6 characters');
+      else if (code === 'auth/invalid-email') setAuthError('Invalid email address');
+      else setAuthError(e.message);
+      setAuthLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      const auth = getAuth();
+      await signOut(auth);
+      setCloudUser(null);
+      setCloudStatus('disconnected');
+    } catch (e) {
+      setToastMsg("Logout failed: " + e.message);
+    }
+  };
+
+  // --- CLOUD SYNC ENGINE (push all data) ---
   useEffect(() => {
-    if (!cloudUser || !FIREBASE_CONFIG.apiKey) return;
+    if (!cloudUser || !FIREBASE_CONFIG.apiKey || !dataLoaded) return;
 
     const syncDataToCloud = async () => {
       setCloudStatus('syncing');
       try {
-        const db = getFirestore();
-        const appId = import.meta.env?.VITE_FIREBASE_APP_ID || 'ghostlog-local';
-
-        const userRef = doc(db, 'artifacts', appId, 'users', cloudUser.uid, 'userData', 'backup');
-
-        await setDoc(userRef, {
+        await setDoc(getUserRef(cloudUser.uid), {
           updatedAt: new Date().toISOString(),
           workoutSplits,
           savedMeals,
           statsHistory,
+          workoutHistory,
+          dailyLog,
           userTargets,
           phase
         }, { merge: true });
@@ -152,17 +221,7 @@ export default function App() {
 
     const timer = setTimeout(syncDataToCloud, 3000);
     return () => clearTimeout(timer);
-  }, [workoutSplits, savedMeals, statsHistory, userTargets, phase, cloudUser]);
-
-  const handleAppleBackup = async () => {
-    try {
-      const auth = getAuth();
-      await linkWithPopup(auth.currentUser, appleProvider);
-      setToastMsg("Success! Data permanently backed up to iCloud.");
-    } catch (error) {
-      setToastMsg("Could not link Apple ID: " + error.message);
-    }
-  };
+  }, [workoutSplits, savedMeals, statsHistory, workoutHistory, dailyLog, userTargets, phase, cloudUser, dataLoaded]);
 
   // --- PREMIUM LOCK GUARDS ---
   const handlePremiumFeature = (action) => {
@@ -231,6 +290,24 @@ export default function App() {
   const dailyTotals = dailyLog.reduce((acc, item) => ({ cal: acc.cal + item.totalCals, p: acc.p + item.totalP, c: acc.c + item.totalC, f: acc.f + item.totalF }), { cal: 0, p: 0, c: 0, f: 0 });
   const currentTargets = userTargets[phase] || INITIAL_TARGETS.CUT;
 
+  // Show auth screen if not logged in
+  if (!cloudUser && !authLoading) {
+    return (
+      <ErrorBoundary>
+        <AuthScreen onAuth={handleAuth} loading={authLoading} error={authError} />
+      </ErrorBoundary>
+    );
+  }
+
+  // Show loading while checking auth state
+  if (authLoading) {
+    return (
+      <div className="bg-black min-h-screen flex items-center justify-center">
+        <Loader2 size={32} className="animate-spin accent-text" />
+      </div>
+    );
+  }
+
   return (
     <ErrorBoundary>
       <div className="bg-black min-h-screen text-gray-100 font-sans max-w-md mx-auto relative shadow-2xl overflow-hidden border-x border-gray-800/50 pt-16">
@@ -285,11 +362,9 @@ export default function App() {
                   {cloudStatus === 'synced' ? <Cloud size={11} className="accent-text"/> : cloudStatus === 'syncing' ? <Loader2 size={11} className="animate-spin text-gray-400"/> : <CloudOff size={11} className="text-red-400"/>}
                   {cloudStatus === 'synced' ? 'Synced' : cloudStatus === 'syncing' ? 'Syncing...' : 'Local'}
                 </div>
-                {cloudUser?.isAnonymous && (
-                  <button onClick={handleAppleBackup} className="text-[10px] font-bold text-gray-500 hover:text-white flex items-center gap-1 bg-gray-800/50 px-2 py-0.5 rounded-md border border-gray-700/50 transition-colors">
-                    <Apple size={10} /> Backup
-                  </button>
-                )}
+                <button onClick={handleLogout} className="text-[10px] font-bold text-gray-500 hover:text-white flex items-center gap-1 bg-gray-800/50 px-2 py-0.5 rounded-md border border-gray-700/50 transition-colors">
+                  Logout
+                </button>
               </div>
             </div>
             <div className="flex items-center gap-2">
