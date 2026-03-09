@@ -41,11 +41,38 @@
         --accent: #3b82f6;
         --accent-dim: rgba(59, 130, 246, 0.15);
       }
-      body { background-color: black; margin: 0; padding: 0; overscroll-behavior: none; }
+      body { background-color: black; color: white; margin: 0; padding: 0; overscroll-behavior: none;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        -webkit-font-smoothing: antialiased; }
+      ::-webkit-scrollbar { display: none; }
+      * { -ms-overflow-style: none; scrollbar-width: none; }
+      .safe-area-top { padding-top: env(safe-area-inset-top); }
+      .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
+      /* Accent color utilities */
+      .accent-text { color: var(--accent); }
+      .accent-bg { background-color: var(--accent); }
+      .accent-bg-dim { background-color: var(--accent-dim); }
+      .accent-border { border-color: var(--accent); }
+      .accent-border-dim { border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
+      .accent-glow { box-shadow: 0 0 20px color-mix(in srgb, var(--accent) 20%, transparent); }
+      /* Error display */
+      #startup-error { display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 99999;
+        background: #1a0000; color: #ff6b6b; padding: 20px; font-size: 13px; word-break: break-all; }
     </style>
   </head>
   <body>
     <div id="root"></div>
+    <div id="startup-error"></div>
+    <script>
+      window.onerror = function(msg, url, line) {
+        var el = document.getElementById('startup-error');
+        if (el) { el.style.display = 'block'; el.textContent = msg + ' (' + url + ':' + line + ')'; }
+      };
+      window.addEventListener('unhandledrejection', function(e) {
+        var el = document.getElementById('startup-error');
+        if (el) { el.style.display = 'block'; el.textContent = 'Unhandled: ' + (e.reason && e.reason.message || e.reason); }
+      });
+    </script>
     <script type="module" src="/main.jsx"></script>
   </body>
 </html>

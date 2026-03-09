@@ -7,7 +7,7 @@ import {
 import { Capacitor } from '@capacitor/core';
 import { Purchases } from '@revenuecat/purchases-capacitor';
 
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
 
@@ -227,20 +227,24 @@ export default function App() {
 
   // Handle magic link completion on page load
   useEffect(() => {
-    if (isSignInWithEmailLink(getAuth(), window.location.href)) {
-      let email = window.localStorage.getItem('ghostlog_magic_email');
-      if (!email) {
-        email = window.prompt('Enter your email to confirm sign-in:');
+    try {
+      if (!getApps().length) return; // Firebase not initialized yet
+      if (isSignInWithEmailLink(getAuth(), window.location.href)) {
+        let email = window.localStorage.getItem('ghostlog_magic_email');
+        if (!email) {
+          email = window.prompt('Enter your email to confirm sign-in:');
+        }
+        if (email) {
+          signInWithEmailLink(getAuth(), email, window.location.href)
+            .then(() => {
+              window.localStorage.removeItem('ghostlog_magic_email');
+              window.history.replaceState(null, '', window.location.origin);
+            })
+            .catch(e => console.error('Magic link sign-in failed', e));
+        }
       }
-      if (email) {
-        signInWithEmailLink(getAuth(), email, window.location.href)
-          .then(() => {
-            window.localStorage.removeItem('ghostlog_magic_email');
-            // Clean URL
-            window.history.replaceState(null, '', window.location.origin);
-          })
-          .catch(e => console.error('Magic link sign-in failed', e));
-      }
+    } catch (e) {
+      console.error('Magic link check failed', e);
     }
   }, []);
 
