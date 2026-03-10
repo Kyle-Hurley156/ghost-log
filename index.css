@@ -31,3 +31,18 @@ body {
 .accent-border { border-color: var(--accent); }
 .accent-border-dim { border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
 .accent-glow { box-shadow: 0 0 20px color-mix(in srgb, var(--accent) 20%, transparent); }
+
+/* Error display */
+#startup-error {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 99999;
+  background: #1a0000;
+  color: #ff6b6b;
+  padding: 20px;
+  font-size: 13px;
+  word-break: break-all;
+}
