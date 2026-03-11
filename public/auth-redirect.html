@@ -19,6 +19,12 @@
       -webkit-tap-highlight-color: transparent;
     }
     .google-btn:active { transform: scale(0.98); opacity: 0.9; }
+    .return-btn {
+      display: none; background: #3b82f6; color: #fff; border: none; padding: 14px 24px; border-radius: 12px;
+      font-size: 15px; font-weight: 600; cursor: pointer; width: 100%; text-align: center;
+      text-decoration: none; -webkit-tap-highlight-color: transparent; margin-top: 12px;
+    }
+    .return-btn:active { transform: scale(0.98); opacity: 0.9; }
     .hidden { display: none !important; }
   </style>
 </head>
@@ -43,6 +49,7 @@
       </svg>
       Sign in with Google
     </button>
+    <a class="return-btn" id="return-btn" href="#">Open GhostLog</a>
     <div class="error" id="error"></div>
   </div>
   <script type="module">
@@ -64,14 +71,30 @@
     const RKEY = 'gl_auth_pending';
 
     function deepLinkBack(googleIdToken) {
+      const url = 'com.ghostlog.app://google-auth?idToken=' + encodeURIComponent(googleIdToken);
       $('google-btn').classList.add('hidden');
       $('spinner').classList.remove('hidden');
       $('status').textContent = 'Success! Returning to GhostLog...';
-      window.location.href = 'com.ghostlog.app://google-auth?idToken=' + encodeURIComponent(googleIdToken);
+
+      // Method 1: hidden iframe (most reliable for custom schemes in in-app browsers)
+      try {
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.src = url;
+        document.body.appendChild(iframe);
+      } catch (_) {}
+
+      // Method 2: location.href after short delay
+      setTimeout(() => { window.location.href = url; }, 300);
+
+      // Method 3: show tappable button after 2s if still on this page
       setTimeout(() => {
         $('spinner').classList.add('hidden');
-        $('status').textContent = 'Signed in! You can close this tab.';
-      }, 3000);
+        $('status').textContent = 'Signed in! Tap below to return.';
+        const btn = $('return-btn');
+        btn.href = url;
+        btn.style.display = 'block';
+      }, 2000);
     }
 
     function getToken(result) {

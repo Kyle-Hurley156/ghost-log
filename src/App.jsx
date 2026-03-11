@@ -278,18 +278,23 @@ export default function App() {
         const { Browser } = await import('@capacitor/browser');
 
         deepLinkCleanup = await CapApp.addListener('appUrlOpen', async ({ url }) => {
+          console.log('Deep link received:', url);
           if (url.includes('google-auth')) {
             try {
               const params = new URL(url).searchParams;
               const idToken = params.get('idToken');
+              console.log('Google idToken received, length:', idToken?.length);
               if (idToken) {
                 const auth = getAuth();
                 const credential = GoogleAuthProvider.credential(idToken);
                 await signInWithCredential(auth, credential);
+                console.log('signInWithCredential success');
+              } else {
+                setAuthError('No token received from Google sign-in');
               }
             } catch (e) {
               console.error('Google deep link auth failed', e);
-              setAuthError('Google sign-in failed');
+              setAuthError('Google sign-in failed: ' + (e?.message || ''));
             }
             setAuthLoading(false);
             try { Browser.close(); } catch (_) {}
