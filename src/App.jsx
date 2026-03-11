@@ -210,24 +210,15 @@ export default function App() {
     setAuthLoading(true);
     setAuthError(null);
     try {
-      const auth = getAuth();
       if (CapacitorFallback.isNativePlatform()) {
-        // Native: use Capacitor Google Auth plugin, then sign in to Firebase with the token
-        const { GoogleAuth } = await import('@codetrix-studio/capacitor-google-auth');
-        const clientId = CapacitorFallback.getPlatform() === 'ios'
-          ? (import.meta.env?.VITE_GOOGLE_IOS_CLIENT_ID || '')
-          : (import.meta.env?.VITE_GOOGLE_WEB_CLIENT_ID || '');
-        await GoogleAuth.initialize({
-          clientId,
-          scopes: ['profile', 'email'],
-          grantOfflineAccess: true
-        });
-        const googleUser = await GoogleAuth.signIn();
-        const idToken = googleUser.authentication.idToken;
-        const credential = GoogleAuthProvider.credential(idToken);
-        await signInWithCredential(auth, credential);
+        // Native: open Google sign-in in system browser, token returns via deep link
+        const { Browser } = await import('@capacitor/browser');
+        await Browser.open({ url: 'https://ghost-log.vercel.app/auth-redirect.html' });
+        // Auth completion is handled by the appUrlOpen listener (see useEffect below)
+        // Don't set authLoading false here — the listener will handle it
       } else {
-        // Web: use Firebase popup
+        // Web: use Firebase popup directly
+        const auth = getAuth();
         const provider = new GoogleAuthProvider();
         await signInWithPopup(auth, provider);
       }
@@ -282,6 +273,37 @@ export default function App() {
     } catch (e) {
       console.error('Magic link check failed', e);
     }
+  }, []);
+
+  // Listen for deep link from Google Sign-In browser redirect
+  useEffect(() => {
+    if (!CapacitorFallback.isNativePlatform()) return;
+    let cleanup;
+    (async () => {
+      try {
+        const { App: CapApp } = await import('@capacitor/app');
+        cleanup = await CapApp.addListener('appUrlOpen', async ({ url }) => {
+          if (url.includes('google-auth')) {
+            try {
+              const params = new URL(url).searchParams;
+              const idToken = params.get('idToken');
+              if (idToken) {
+                const auth = getAuth();
+                const credential = GoogleAuthProvider.credential(idToken);
+                await signInWithCredential(auth, credential);
+              }
+            } catch (e) {
+              console.error('Google deep link auth failed', e);
+              setAuthError('Google sign-in failed');
+            }
+            setAuthLoading(false);
+            // Close the browser tab
+            try { const { Browser } = await import('@capacitor/browser'); Browser.close(); } catch (_) {}
+          }
+        });
+      } catch (e) { console.error('Deep link listener setup failed', e); }
+    })();
+    return () => { if (cleanup) cleanup.remove(); };
   }, []);
 
   const handleLogout = async () => {
