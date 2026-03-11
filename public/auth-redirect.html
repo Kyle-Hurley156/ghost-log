@@ -49,7 +49,7 @@
       </svg>
       Sign in with Google
     </button>
-    <a class="return-btn" id="return-btn" href="#">Open GhostLog</a>
+    <button class="return-btn" id="return-btn">Open GhostLog</button>
     <div class="error" id="error"></div>
   </div>
   <script type="module">
@@ -70,32 +70,29 @@
     const $ = id => document.getElementById(id);
     const RKEY = 'gl_auth_pending';
 
+    let deepLinkUrl = '';
+
     function deepLinkBack(googleIdToken) {
-      const url = 'com.ghostlog.app://google-auth?idToken=' + encodeURIComponent(googleIdToken);
+      deepLinkUrl = 'com.ghostlog.app://google-auth?idToken=' + encodeURIComponent(googleIdToken);
       $('google-btn').classList.add('hidden');
       $('spinner').classList.remove('hidden');
       $('status').textContent = 'Success! Returning to GhostLog...';
 
-      // Method 1: hidden iframe (most reliable for custom schemes in in-app browsers)
-      try {
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        iframe.src = url;
-        document.body.appendChild(iframe);
-      } catch (_) {}
+      // Method 1: location.href (works in most browsers with user gesture context)
+      try { window.location.href = deepLinkUrl; } catch (_) {}
 
-      // Method 2: location.href after short delay
-      setTimeout(() => { window.location.href = url; }, 300);
-
-      // Method 3: show tappable button after 2s if still on this page
+      // Method 2: show tappable button after 1.5s if still on this page
       setTimeout(() => {
         $('spinner').classList.add('hidden');
         $('status').textContent = 'Signed in! Tap below to return.';
-        const btn = $('return-btn');
-        btn.href = url;
-        btn.style.display = 'block';
-      }, 2000);
+        $('return-btn').style.display = 'block';
+      }, 1500);
     }
+
+    // Return button uses window.location.href on user tap (reliable for custom schemes on iOS)
+    $('return-btn').addEventListener('click', () => {
+      if (deepLinkUrl) window.location.href = deepLinkUrl;
+    });
 
     function getToken(result) {
       const c = GoogleAuthProvider.credentialFromResult(result);
