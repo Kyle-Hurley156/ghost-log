@@ -156,6 +156,19 @@ export default function App() {
           // Use localStorage instead of indexedDB — indexedDB hangs in WKWebView
           await setPersistence(auth, browserLocalPersistence);
 
+          // Handle magic link sign-in (must run after Firebase init)
+          if (isSignInWithEmailLink(auth, window.location.href)) {
+            let email = window.localStorage.getItem('ghostlog_magic_email');
+            if (!email) email = window.prompt('Enter your email to confirm sign-in:');
+            if (email) {
+              try {
+                await signInWithEmailLink(auth, email, window.location.href);
+                window.localStorage.removeItem('ghostlog_magic_email');
+                window.history.replaceState(null, '', window.location.origin);
+              } catch (e) { console.error('Magic link sign-in failed', e); }
+            }
+          }
+
           const unsubscribe = onAuthStateChanged(auth, async (user) => {
             clearTimeout(authTimeout);
             if (user) {
@@ -252,28 +265,7 @@ export default function App() {
     }
   };
 
-  // Handle magic link completion on page load
-  useEffect(() => {
-    try {
-      if (!getApps().length) return; // Firebase not initialized yet
-      if (isSignInWithEmailLink(getAuth(), window.location.href)) {
-        let email = window.localStorage.getItem('ghostlog_magic_email');
-        if (!email) {
-          email = window.prompt('Enter your email to confirm sign-in:');
-        }
-        if (email) {
-          signInWithEmailLink(getAuth(), email, window.location.href)
-            .then(() => {
-              window.localStorage.removeItem('ghostlog_magic_email');
-              window.history.replaceState(null, '', window.location.origin);
-            })
-            .catch(e => console.error('Magic link sign-in failed', e));
-        }
-      }
-    } catch (e) {
-      console.error('Magic link check failed', e);
-    }
-  }, []);
+  // Magic link completion is handled inside Firebase init useEffect above
 
   // Listen for deep link from Google Sign-In browser redirect
   useEffect(() => {
