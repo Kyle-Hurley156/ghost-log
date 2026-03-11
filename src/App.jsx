@@ -142,7 +142,7 @@ export default function App() {
 
     if (FIREBASE_CONFIG.apiKey) {
       try {
-        const app = initializeApp(FIREBASE_CONFIG);
+        const app = getApps().length ? getApps()[0] : initializeApp(FIREBASE_CONFIG);
         const auth = getAuth(app);
 
         const unsubscribe = onAuthStateChanged(auth, async (user) => {

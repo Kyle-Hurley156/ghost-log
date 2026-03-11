@@ -10,9 +10,9 @@
     <meta name="theme-color" content="#000000">
 
     <!-- Icons -->
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
+    <link rel="manifest" href="./manifest.json" />
 
     <!-- iOS PWA -->
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -23,17 +23,40 @@
   </head>
   <body>
     <div id="root"></div>
-    <div id="startup-error"></div>
+    <!-- Visible loading fallback (works without CSS/JS bundles) -->
+    <div id="app-loader" style="position:fixed;inset:0;background:#000;display:flex;align-items:center;justify-content:center;z-index:9999;">
+      <div style="text-align:center;color:#666;">
+        <div style="width:32px;height:32px;border:3px solid #333;border-top-color:#3b82f6;border-radius:50%;animation:s 1s linear infinite;margin:0 auto 12px;"></div>
+        <style>@keyframes s{to{transform:rotate(360deg)}}</style>
+        <div style="font:13px -apple-system,sans-serif;">Loading GhostLog...</div>
+      </div>
+    </div>
+    <div id="startup-error" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:#1a0000;color:#ff6b6b;padding:20px;font:13px -apple-system,sans-serif;word-break:break-all;"></div>
     <script>
-      window.onerror = function(msg, url, line) {
+      function showError(msg) {
         var el = document.getElementById('startup-error');
-        if (el) { el.style.display = 'block'; el.textContent = msg + ' (' + url + ':' + line + ')'; }
-      };
-      window.addEventListener('unhandledrejection', function(e) {
-        var el = document.getElementById('startup-error');
-        if (el) { el.style.display = 'block'; el.textContent = 'Unhandled: ' + (e.reason && e.reason.message || e.reason); }
+        if (el) { el.style.display = 'block'; el.textContent = msg; }
+        var loader = document.getElementById('app-loader');
+        if (loader) loader.style.display = 'none';
+      }
+      window.onerror = function(msg, url, line) { showError(msg + ' (' + url + ':' + line + ')'); };
+      window.addEventListener('unhandledrejection', function(e) { showError('Unhandled: ' + (e.reason && e.reason.message || e.reason)); });
+      // Hide loader once React mounts
+      var _mo = new MutationObserver(function() {
+        if (document.getElementById('root').children.length > 0) {
+          var loader = document.getElementById('app-loader');
+          if (loader) loader.style.display = 'none';
+          _mo.disconnect();
+        }
       });
+      _mo.observe(document.getElementById('root'), { childList: true });
+      // Fallback: if nothing loads in 10s, show diagnostic
+      setTimeout(function() {
+        if (document.getElementById('root').children.length === 0) {
+          showError('App failed to load after 10s. JS bundle may not have loaded. Check Capacitor webDir sync.');
+        }
+      }, 10000);
     </script>
-    <script type="module" src="/main.jsx"></script>
+    <script type="module" src="./main.jsx"></script>
   </body>
 </html>
