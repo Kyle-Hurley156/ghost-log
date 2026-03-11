@@ -278,11 +278,13 @@ export default function App() {
   // Listen for deep link from Google Sign-In browser redirect
   useEffect(() => {
     if (!CapacitorFallback.isNativePlatform()) return;
-    let cleanup;
+    let deepLinkCleanup, browserCleanup;
     (async () => {
       try {
         const { App: CapApp } = await import('@capacitor/app');
-        cleanup = await CapApp.addListener('appUrlOpen', async ({ url }) => {
+        const { Browser } = await import('@capacitor/browser');
+
+        deepLinkCleanup = await CapApp.addListener('appUrlOpen', async ({ url }) => {
           if (url.includes('google-auth')) {
             try {
               const params = new URL(url).searchParams;
@@ -297,13 +299,20 @@ export default function App() {
               setAuthError('Google sign-in failed');
             }
             setAuthLoading(false);
-            // Close the browser tab
-            try { const { Browser } = await import('@capacitor/browser'); Browser.close(); } catch (_) {}
+            try { Browser.close(); } catch (_) {}
           }
+        });
+
+        // Reset loading state if user dismisses browser without completing auth
+        browserCleanup = await Browser.addListener('browserFinished', () => {
+          setAuthLoading(false);
         });
       } catch (e) { console.error('Deep link listener setup failed', e); }
     })();
-    return () => { if (cleanup) cleanup.remove(); };
+    return () => {
+      if (deepLinkCleanup) deepLinkCleanup.remove();
+      if (browserCleanup) browserCleanup.remove();
+    };
   }, []);
 
   const handleLogout = async () => {
