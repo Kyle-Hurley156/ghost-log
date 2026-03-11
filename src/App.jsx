@@ -8,7 +8,7 @@ import { Capacitor } from '@capacitor/core';
 import { Purchases } from '@revenuecat/purchases-capacitor';
 
 import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink } from 'firebase/auth';
+import { getAuth, browserLocalPersistence, setPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
 
 import { FIREBASE_CONFIG, INITIAL_SPLITS, INITIAL_TARGETS } from './constants';
@@ -140,31 +140,48 @@ export default function App() {
     };
     setupRevenueCat();
 
-    if (FIREBASE_CONFIG.apiKey) {
-      try {
-        const app = getApps().length ? getApps()[0] : initializeApp(FIREBASE_CONFIG);
-        const auth = getAuth(app);
+    // Safety net: if auth hasn't resolved in 5s, stop waiting
+    const authTimeout = setTimeout(() => {
+      setAuthLoading(prev => {
+        if (prev) console.warn("Auth timeout — forcing load");
+        return false;
+      });
+    }, 5000);
 
-        const unsubscribe = onAuthStateChanged(auth, async (user) => {
-          if (user) {
-            setCloudUser(user);
-            setCloudStatus('synced');
-            await loadCloudData(user.uid);
-          } else {
-            setCloudUser(null);
-            setCloudStatus('disconnected');
-            setDataLoaded(false);
-          }
+    if (FIREBASE_CONFIG.apiKey) {
+      (async () => {
+        try {
+          const app = getApps().length ? getApps()[0] : initializeApp(FIREBASE_CONFIG);
+          const auth = getAuth(app);
+          // Use localStorage instead of indexedDB — indexedDB hangs in WKWebView
+          await setPersistence(auth, browserLocalPersistence);
+
+          const unsubscribe = onAuthStateChanged(auth, async (user) => {
+            clearTimeout(authTimeout);
+            if (user) {
+              setCloudUser(user);
+              setCloudStatus('synced');
+              await loadCloudData(user.uid);
+            } else {
+              setCloudUser(null);
+              setCloudStatus('disconnected');
+              setDataLoaded(false);
+            }
+            setAuthLoading(false);
+          });
+          return () => unsubscribe();
+        } catch (e) {
+          console.error("Firebase Init Failed", e);
+          clearTimeout(authTimeout);
           setAuthLoading(false);
-        });
-        return () => unsubscribe();
-      } catch (e) {
-        console.error("Firebase Init Failed", e);
-        setAuthLoading(false);
-      }
+        }
+      })();
     } else {
+      clearTimeout(authTimeout);
       setAuthLoading(false);
     }
+
+    return () => clearTimeout(authTimeout);
   }, []);
 
   // --- AUTH HANDLERS ---
