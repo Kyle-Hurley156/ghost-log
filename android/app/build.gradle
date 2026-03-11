@@ -23,10 +23,10 @@ android {
         }
     }
 
-    // Force Java 21 Compatibility (required by @capacitor/app@8.x)
+    // Force Java 17 Compatibility
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_21
-        targetCompatibility JavaVersion.VERSION_21
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 }
 
