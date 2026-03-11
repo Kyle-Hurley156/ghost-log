@@ -245,22 +245,23 @@ export default function App() {
   };
 
   const handleMagicLink = async (email) => {
-    setAuthLoading(true);
+    // Don't set authLoading here — it unmounts AuthScreen and loses the "link sent" UI state
     setAuthError(null);
     try {
       const auth = getAuth();
+      const baseUrl = CapacitorFallback.isNativePlatform()
+        ? 'https://ghost-log.vercel.app'
+        : window.location.origin;
       const actionCodeSettings = {
-        url: window.location.origin + '/?finishSignIn=true',
+        url: baseUrl + '/?finishSignIn=true',
         handleCodeInApp: true,
       };
       await sendSignInLinkToEmail(auth, email, actionCodeSettings);
       window.localStorage.setItem('ghostlog_magic_email', email);
       setAuthError(null);
-      setAuthLoading(false);
       return true; // signal success to show confirmation
     } catch (e) {
       setAuthError('Failed to send magic link: ' + (e?.message || ''));
-      setAuthLoading(false);
       return false;
     }
   };

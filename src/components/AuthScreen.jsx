@@ -25,12 +25,17 @@ export const AuthScreen = ({ onAuth, onGoogle, onMagicLink, loading, error }) =>
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [magicLinkSent, setMagicLinkSent] = useState(false);
+  const [magicSending, setMagicSending] = useState(false);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (mode === 'magic') {
-      if (!email) return;
-      onMagicLink(email).then(success => { if (success) setMagicLinkSent(true); });
+      if (!email || magicSending) return;
+      setMagicSending(true);
+      onMagicLink(email).then(success => {
+        setMagicSending(false);
+        if (success) setMagicLinkSent(true);
+      });
     } else {
       if (!email || !password) return;
       onAuth(email, password, mode === 'signup');
@@ -118,10 +123,10 @@ export const AuthScreen = ({ onAuth, onGoogle, onMagicLink, loading, error }) =>
 
               <button
                 type="submit"
-                disabled={loading || !email || (mode !== 'magic' && !password)}
+                disabled={(mode === 'magic' ? magicSending : loading) || !email || (mode !== 'magic' && !password)}
                 className="w-full accent-bg text-white font-bold py-3 rounded-xl transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {loading ? <Loader2 size={18} className="animate-spin" /> : null}
+                {(mode === 'magic' ? magicSending : loading) ? <Loader2 size={18} className="animate-spin" /> : null}
                 {mode === 'signup' ? 'SIGN UP' : mode === 'magic' ? 'SEND MAGIC LINK' : 'LOG IN'}
               </button>
             </form>
