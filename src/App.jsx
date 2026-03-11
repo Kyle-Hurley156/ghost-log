@@ -406,7 +406,7 @@ export default function App() {
   if (!cloudUser && !authLoading) {
     return (
       <ErrorBoundary>
-        <AuthScreen onAuth={handleAuth} onGoogle={handleGoogleSignIn} onMagicLink={handleMagicLink} loading={authLoading} error={authError} />
+        <AuthScreen onAuth={handleAuth} onGoogle={handleGoogleSignIn} onMagicLink={handleMagicLink} loading={authLoading} error={authError} isNative={CapacitorFallback.isNativePlatform()} />
       </ErrorBoundary>
     );
   }

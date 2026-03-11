@@ -41,11 +41,14 @@
       }
       window.onerror = function(msg, url, line) { showError(msg + ' (' + url + ':' + line + ')'); };
       window.addEventListener('unhandledrejection', function(e) { showError('Unhandled: ' + (e.reason && e.reason.message || e.reason)); });
-      // Hide loader once React mounts
+      // Hide loader + disable error handlers once React mounts
       var _mo = new MutationObserver(function() {
         if (document.getElementById('root').children.length > 0) {
           var loader = document.getElementById('app-loader');
           if (loader) loader.style.display = 'none';
+          var err = document.getElementById('startup-error');
+          if (err) err.style.display = 'none';
+          window.onerror = null;
           _mo.disconnect();
         }
       });
