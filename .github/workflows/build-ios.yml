@@ -40,6 +40,8 @@ jobs:
           echo "VITE_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}" >> .env
           echo "VITE_FIREBASE_APP_ID=${{ secrets.FIREBASE_APP_ID }}" >> .env
           echo "VITE_RC_APPLE_KEY=${{ secrets.RC_APPLE_KEY }}" >> .env
+          echo "VITE_GOOGLE_WEB_CLIENT_ID=${{ secrets.GOOGLE_WEB_CLIENT_ID }}" >> .env
+          echo "VITE_GOOGLE_IOS_CLIENT_ID=${{ secrets.GOOGLE_IOS_CLIENT_ID }}" >> .env
 
       - name: Build Web Assets
         run: npm run build
@@ -56,6 +58,19 @@ jobs:
           /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string 'GhostLog uses your camera to scan food labels and meals for macro tracking.'" Info.plist || /usr/libexec/PlistBuddy -c "Set :NSCameraUsageDescription 'GhostLog uses your camera to scan food labels and meals for macro tracking.'" Info.plist
           /usr/libexec/PlistBuddy -c "Add :NSHealthShareUsageDescription string 'GhostLog reads steps, weight and sleep from Apple Health to auto-fill your daily log.'" Info.plist || /usr/libexec/PlistBuddy -c "Set :NSHealthShareUsageDescription 'GhostLog reads steps, weight and sleep from Apple Health to auto-fill your daily log.'" Info.plist
           /usr/libexec/PlistBuddy -c "Add :NSHealthUpdateUsageDescription string 'GhostLog can write workout data to Apple Health.'" Info.plist || /usr/libexec/PlistBuddy -c "Set :NSHealthUpdateUsageDescription 'GhostLog can write workout data to Apple Health.'" Info.plist
+
+      - name: Configure Google Sign-In URL Scheme
+        if: env.GOOGLE_IOS_CLIENT_ID != ''
+        env:
+          GOOGLE_IOS_CLIENT_ID: ${{ secrets.GOOGLE_IOS_CLIENT_ID }}
+        run: |
+          cd ios/App/App
+          # Reverse the client ID for the URL scheme (e.g., com.googleusercontent.apps.12345 -> com.googleusercontent.apps.12345)
+          REVERSED=$(echo "$GOOGLE_IOS_CLIENT_ID" | awk -F. '{for(i=NF;i>0;i--) printf "%s%s",$i,(i>1?".":"")}')
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes array" Info.plist 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0 dict" Info.plist
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes array" Info.plist
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string $REVERSED" Info.plist
 
       - name: Create ExportOptions.plist
         run: |

@@ -8,7 +8,7 @@ import { Capacitor } from '@capacitor/core';
 import { Purchases } from '@revenuecat/purchases-capacitor';
 
 import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, browserLocalPersistence, setPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink } from 'firebase/auth';
+import { getAuth, browserLocalPersistence, setPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithCredential, signInWithPopup, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
 
 import { FIREBASE_CONFIG, INITIAL_SPLITS, INITIAL_TARGETS } from './constants';
@@ -211,11 +211,30 @@ export default function App() {
     setAuthError(null);
     try {
       const auth = getAuth();
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      if (CapacitorFallback.isNativePlatform()) {
+        // Native: use Capacitor Google Auth plugin, then sign in to Firebase with the token
+        const { GoogleAuth } = await import('@codetrix-studio/capacitor-google-auth');
+        const clientId = CapacitorFallback.getPlatform() === 'ios'
+          ? (import.meta.env?.VITE_GOOGLE_IOS_CLIENT_ID || '')
+          : (import.meta.env?.VITE_GOOGLE_WEB_CLIENT_ID || '');
+        await GoogleAuth.initialize({
+          clientId,
+          scopes: ['profile', 'email'],
+          grantOfflineAccess: true
+        });
+        const googleUser = await GoogleAuth.signIn();
+        const idToken = googleUser.authentication.idToken;
+        const credential = GoogleAuthProvider.credential(idToken);
+        await signInWithCredential(auth, credential);
+      } else {
+        // Web: use Firebase popup
+        const provider = new GoogleAuthProvider();
+        await signInWithPopup(auth, provider);
+      }
     } catch (e) {
-      if (e?.code !== 'auth/popup-closed-by-user') {
-        setAuthError(e?.code === 'auth/unauthorized-domain' ? 'Domain not authorized in Firebase' : 'Google sign-in failed');
+      const msg = e?.message || '';
+      if (e?.code !== 'auth/popup-closed-by-user' && !msg.includes('canceled') && !msg.includes('cancelled')) {
+        setAuthError('Google sign-in failed');
       }
       setAuthLoading(false);
     }
@@ -406,7 +425,7 @@ export default function App() {
   if (!cloudUser && !authLoading) {
     return (
       <ErrorBoundary>
-        <AuthScreen onAuth={handleAuth} onGoogle={handleGoogleSignIn} onMagicLink={handleMagicLink} loading={authLoading} error={authError} isNative={CapacitorFallback.isNativePlatform()} />
+        <AuthScreen onAuth={handleAuth} onGoogle={handleGoogleSignIn} onMagicLink={handleMagicLink} loading={authLoading} error={authError} />
       </ErrorBoundary>
     );
   }

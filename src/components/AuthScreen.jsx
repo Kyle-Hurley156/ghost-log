@@ -19,7 +19,7 @@ const GoogleIcon = () => (
   </svg>
 );
 
-export const AuthScreen = ({ onAuth, onGoogle, onMagicLink, loading, error, isNative }) => {
+export const AuthScreen = ({ onAuth, onGoogle, onMagicLink, loading, error }) => {
   const [mode, setMode] = useState('login'); // login, signup, magic
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -52,24 +52,20 @@ export const AuthScreen = ({ onAuth, onGoogle, onMagicLink, loading, error, isNa
           </p>
         </div>
 
-        {/* Google Sign In — only works on web (signInWithPopup doesn't work in WKWebView) */}
-        {!isNative && (
-          <>
-            <button
-              onClick={onGoogle}
-              disabled={loading}
-              className="w-full bg-white text-gray-800 font-bold py-3 rounded-xl flex items-center justify-center gap-3 mb-4 active:scale-[0.98] transition-all disabled:opacity-50 text-sm"
-            >
-              <GoogleIcon /> Continue with Google
-            </button>
+        {/* Google Sign In */}
+        <button
+          onClick={onGoogle}
+          disabled={loading}
+          className="w-full bg-white text-gray-800 font-bold py-3 rounded-xl flex items-center justify-center gap-3 mb-4 active:scale-[0.98] transition-all disabled:opacity-50 text-sm"
+        >
+          <GoogleIcon /> Continue with Google
+        </button>
 
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex-1 h-px bg-gray-800"></div>
-              <span className="text-gray-600 text-[10px] uppercase tracking-widest font-bold">or</span>
-              <div className="flex-1 h-px bg-gray-800"></div>
-            </div>
-          </>
-        )}
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex-1 h-px bg-gray-800"></div>
+          <span className="text-gray-600 text-[10px] uppercase tracking-widest font-bold">or</span>
+          <div className="flex-1 h-px bg-gray-800"></div>
+        </div>
 
         {/* Magic link sent confirmation */}
         {magicLinkSent ? (
