@@ -283,7 +283,16 @@ export default function App() {
       setAuthError(null);
       return true; // signal success to show confirmation
     } catch (e) {
-      setAuthError('Failed to send magic link: ' + (e?.message || ''));
+      const code = e?.code || '';
+      if (code === 'auth/operation-not-allowed') {
+        setAuthError('Magic link sign-in is not enabled. Enable "Email link" in Firebase Console → Authentication → Sign-in method.');
+      } else if (code === 'auth/invalid-email') {
+        setAuthError('Invalid email address.');
+      } else if (code === 'auth/too-many-requests') {
+        setAuthError('Too many attempts. Please wait a moment and try again.');
+      } else {
+        setAuthError('Failed to send magic link: ' + (e?.message || ''));
+      }
       return false;
     }
   };

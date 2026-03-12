@@ -2,7 +2,8 @@ export const APP_VERSION = "4.0";
 
 export const FIREBASE_CONFIG = {
   apiKey: import.meta.env?.VITE_FIREBASE_API_KEY || "AIzaSyAH3L6UcFaXos3AT3o8W8EHsgWBbL8_ZA4",
-  authDomain: import.meta.env?.VITE_FIREBASE_AUTH_DOMAIN || "ghost-log.firebaseapp.com",
+  // Use Vercel hosting domain to avoid Safari ITP blocking sessionStorage on cross-origin firebaseapp.com
+  authDomain: import.meta.env?.VITE_FIREBASE_AUTH_DOMAIN || "ghost-log.vercel.app",
   projectId: import.meta.env?.VITE_FIREBASE_PROJECT_ID || "ghost-log",
   storageBucket: import.meta.env?.VITE_FIREBASE_STORAGE_BUCKET || "ghost-log.firebasestorage.app",
   messagingSenderId: import.meta.env?.VITE_FIREBASE_MESSAGING_SENDER_ID || "585835627677",
