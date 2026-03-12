@@ -225,6 +225,7 @@ export default function App() {
     try {
       if (CapacitorFallback.isNativePlatform()) {
         // Native: open Google sign-in in system browser, token returns via deep link
+        googleAuthPending.current = true;
         const { Browser } = await import('@capacitor/browser');
         await Browser.open({ url: 'https://ghost-log.vercel.app/auth-redirect.html' });
         // Auth completion is handled by the appUrlOpen listener (see useEffect below)
@@ -269,6 +270,7 @@ export default function App() {
   // Magic link completion is handled inside Firebase init useEffect above
 
   // Listen for deep link from Google Sign-In browser redirect
+  const googleAuthPending = useRef(false);
   useEffect(() => {
     if (!CapacitorFallback.isNativePlatform()) return;
     let deepLinkCleanup, browserCleanup;
@@ -280,13 +282,17 @@ export default function App() {
         deepLinkCleanup = await CapApp.addListener('appUrlOpen', async ({ url }) => {
           console.log('Deep link received:', url);
           if (url.includes('google-auth')) {
+            googleAuthPending.current = false;
             try {
-              const params = new URL(url).searchParams;
-              const idToken = params.get('idToken');
-              console.log('Google idToken received, length:', idToken?.length);
-              if (idToken) {
+              // Parse tokens from deep link — avoid new URL() which can fail with custom schemes
+              const qs = url.split('?')[1] || '';
+              const params = new URLSearchParams(qs);
+              const idToken = params.get('idToken') || null;
+              const accessToken = params.get('accessToken') || null;
+              console.log('Google tokens received — idToken:', !!idToken, 'accessToken:', !!accessToken);
+              if (idToken || accessToken) {
                 const auth = getAuth();
-                const credential = GoogleAuthProvider.credential(idToken);
+                const credential = GoogleAuthProvider.credential(idToken, accessToken);
                 await signInWithCredential(auth, credential);
                 console.log('signInWithCredential success');
               } else {
@@ -301,9 +307,14 @@ export default function App() {
           }
         });
 
-        // Reset loading state if user dismisses browser without completing auth
+        // Only reset loading if user dismissed browser without completing Google auth
         browserCleanup = await Browser.addListener('browserFinished', () => {
-          setAuthLoading(false);
+          // Delay slightly — on iOS the deep link event can arrive just after browserFinished
+          setTimeout(() => {
+            if (!googleAuthPending.current) return;
+            googleAuthPending.current = false;
+            setAuthLoading(false);
+          }, 1500);
         });
       } catch (e) { console.error('Deep link listener setup failed', e); }
     })();

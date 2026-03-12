@@ -52,19 +52,16 @@ jobs:
           cd ios/App/App
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 4.0" Info.plist
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ github.run_number }}" Info.plist
-          /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" Info.plist || /usr/libexec/PlistBuddy -c "Set :ITSAppUsesNonExemptEncryption false" Info.plist
+          /usr/libexec/PlistBuddy -c "Set :ITSAppUsesNonExemptEncryption false" Info.plist
           /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string 'GhostLog uses your camera to scan food labels and meals for macro tracking.'" Info.plist || /usr/libexec/PlistBuddy -c "Set :NSCameraUsageDescription 'GhostLog uses your camera to scan food labels and meals for macro tracking.'" Info.plist
           /usr/libexec/PlistBuddy -c "Add :NSHealthShareUsageDescription string 'GhostLog reads steps, weight and sleep from Apple Health to auto-fill your daily log.'" Info.plist || /usr/libexec/PlistBuddy -c "Set :NSHealthShareUsageDescription 'GhostLog reads steps, weight and sleep from Apple Health to auto-fill your daily log.'" Info.plist
           /usr/libexec/PlistBuddy -c "Add :NSHealthUpdateUsageDescription string 'GhostLog can write workout data to Apple Health.'" Info.plist || /usr/libexec/PlistBuddy -c "Set :NSHealthUpdateUsageDescription 'GhostLog can write workout data to Apple Health.'" Info.plist
 
-      - name: Configure Deep Link URL Scheme for Google Auth
+      - name: Verify Deep Link URL Scheme
         run: |
           cd ios/App/App
-          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes array" Info.plist 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0 dict" Info.plist
-          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLName string com.ghostlog.app" Info.plist
-          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes array" Info.plist
-          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string com.ghostlog.app" Info.plist
+          # URL scheme is already in Info.plist — just verify it exists
+          /usr/libexec/PlistBuddy -c "Print :CFBundleURLTypes:0:CFBundleURLSchemes:0" Info.plist
 
       - name: Create ExportOptions.plist
         run: |

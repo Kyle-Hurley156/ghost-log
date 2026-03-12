@@ -54,7 +54,7 @@
   </div>
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
-    import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+    import { getAuth, GoogleAuthProvider, signInWithPopup } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
     const config = {
       apiKey: "AIzaSyAH3L6UcFaXos3AT3o8W8EHsgWBbL8_ZA4",
@@ -68,20 +68,30 @@
     const app = initializeApp(config);
     const auth = getAuth(app);
     const $ = id => document.getElementById(id);
-    const RKEY = 'gl_auth_pending';
 
     let deepLinkUrl = '';
 
-    function deepLinkBack(googleIdToken) {
-      deepLinkUrl = 'com.ghostlog.app://google-auth?idToken=' + encodeURIComponent(googleIdToken);
+    function buildDeepLink(result) {
+      const cred = GoogleAuthProvider.credentialFromResult(result);
+      const idToken = cred?.idToken || '';
+      const accessToken = cred?.accessToken || '';
+      if (!idToken && !accessToken) return null;
+      const params = new URLSearchParams();
+      if (idToken) params.set('idToken', idToken);
+      if (accessToken) params.set('accessToken', accessToken);
+      return 'com.ghostlog.app://google-auth?' + params.toString();
+    }
+
+    function deepLinkBack(url) {
+      deepLinkUrl = url;
       $('google-btn').classList.add('hidden');
       $('spinner').classList.remove('hidden');
       $('status').textContent = 'Success! Returning to GhostLog...';
 
-      // Method 1: location.href (works in most browsers with user gesture context)
+      // Try to open deep link immediately
       try { window.location.href = deepLinkUrl; } catch (_) {}
 
-      // Method 2: show tappable button after 1.5s if still on this page
+      // Show tappable button as fallback after 1.5s
       setTimeout(() => {
         $('spinner').classList.add('hidden');
         $('status').textContent = 'Signed in! Tap below to return.';
@@ -89,15 +99,9 @@
       }, 1500);
     }
 
-    // Return button uses window.location.href on user tap (reliable for custom schemes on iOS)
     $('return-btn').addEventListener('click', () => {
       if (deepLinkUrl) window.location.href = deepLinkUrl;
     });
-
-    function getToken(result) {
-      const c = GoogleAuthProvider.credentialFromResult(result);
-      return c?.idToken || null;
-    }
 
     function showRetry(msg) {
       $('spinner').classList.add('hidden');
@@ -105,40 +109,7 @@
       $('status').textContent = msg || 'Tap to sign in';
     }
 
-    // --- FLOW ---
-    // If returning from redirect: extract token and deep link back
-    // If first visit: immediately redirect to Google (no button needed)
-
-    if (sessionStorage.getItem(RKEY)) {
-      sessionStorage.removeItem(RKEY);
-      $('status').textContent = 'Completing sign-in...';
-      try {
-        const result = await getRedirectResult(auth);
-        if (result?.user) {
-          const token = getToken(result);
-          if (token) { deepLinkBack(token); } else { showRetry('Tap to complete sign-in'); }
-        } else {
-          showRetry('Tap to complete sign-in');
-        }
-      } catch (e) {
-        console.error('redirect result error', e);
-        showRetry('Tap to complete sign-in');
-      }
-    } else {
-      // First visit — go straight to Google
-      try {
-        sessionStorage.setItem(RKEY, '1');
-        const provider = new GoogleAuthProvider();
-        await signInWithRedirect(auth, provider);
-      } catch (e) {
-        sessionStorage.removeItem(RKEY);
-        $('error').textContent = 'Could not connect: ' + (e.message || e);
-        showRetry('Tap to sign in');
-      }
-    }
-
-    // Retry button uses signInWithPopup (user gesture = popup allowed)
-    $('google-btn').addEventListener('click', async () => {
+    async function doPopupSignIn() {
       $('google-btn').classList.add('hidden');
       $('spinner').classList.remove('hidden');
       $('status').textContent = 'Signing in...';
@@ -146,17 +117,38 @@
       const provider = new GoogleAuthProvider();
       try {
         const result = await signInWithPopup(auth, provider);
-        const token = getToken(result);
-        if (token) { deepLinkBack(token); } else { showRetry('Could not get credentials. Try again.'); }
+        const url = buildDeepLink(result);
+        if (url) {
+          deepLinkBack(url);
+        } else {
+          $('error').textContent = 'Could not get credentials from Google. Try again.';
+          showRetry('Tap to try again');
+        }
       } catch (e) {
-        if (e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request') {
+        if (e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request' || e.code === 'auth/popup-blocked') {
           showRetry('Tap to sign in');
         } else {
           $('error').textContent = 'Sign-in failed: ' + (e.message || e);
           showRetry('Tap to try again');
         }
       }
-    });
+    }
+
+    // On mobile/in-app browsers, popups without user gesture are blocked.
+    // Show the button immediately so the user taps it (user gesture = popup allowed).
+    const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
+    if (isMobile) {
+      showRetry('Tap to sign in with Google');
+    } else {
+      // Desktop: auto-trigger popup
+      try {
+        await doPopupSignIn();
+      } catch (_) {
+        showRetry('Tap to sign in');
+      }
+    }
+
+    $('google-btn').addEventListener('click', doPopupSignIn);
   </script>
 </body>
 </html>
