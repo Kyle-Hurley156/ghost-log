@@ -19,13 +19,14 @@ const GoogleIcon = () => (
   </svg>
 );
 
-export const AuthScreen = ({ onAuth, onGoogle, onMagicLink, loading, error }) => {
-  const [mode, setMode] = useState('login'); // login, signup, magic
+export const AuthScreen = ({ onAuth, onGoogle, onMagicLink, onForgotPassword, loading, error }) => {
+  const [mode, setMode] = useState('login'); // login, signup, magic, forgot
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [magicLinkSent, setMagicLinkSent] = useState(false);
   const [magicSending, setMagicSending] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -35,6 +36,13 @@ export const AuthScreen = ({ onAuth, onGoogle, onMagicLink, loading, error }) =>
       onMagicLink(email).then(success => {
         setMagicSending(false);
         if (success) setMagicLinkSent(true);
+      });
+    } else if (mode === 'forgot') {
+      if (!email || magicSending) return;
+      setMagicSending(true);
+      onForgotPassword(email).then(success => {
+        setMagicSending(false);
+        if (success) setResetSent(true);
       });
     } else {
       if (!email || !password) return;
@@ -53,7 +61,7 @@ export const AuthScreen = ({ onAuth, onGoogle, onMagicLink, loading, error }) =>
             GHOST<span className="text-gray-500">LOG</span>
           </h1>
           <p className="text-gray-600 text-xs mt-2 uppercase tracking-widest">
-            {mode === 'signup' ? 'Create Account' : mode === 'magic' ? 'Magic Link' : 'Welcome Back'}
+            {mode === 'signup' ? 'Create Account' : mode === 'magic' ? 'Magic Link' : mode === 'forgot' ? 'Reset Password' : 'Welcome Back'}
           </p>
         </div>
 
@@ -72,17 +80,17 @@ export const AuthScreen = ({ onAuth, onGoogle, onMagicLink, loading, error }) =>
           <div className="flex-1 h-px bg-gray-800"></div>
         </div>
 
-        {/* Magic link sent confirmation */}
-        {magicLinkSent ? (
+        {/* Magic link / reset sent confirmation */}
+        {(magicLinkSent || resetSent) ? (
           <div className="text-center py-8">
             <div className="w-16 h-16 accent-bg-dim rounded-full flex items-center justify-center mx-auto mb-4">
               <Check size={32} className="accent-text"/>
             </div>
             <h3 className="text-white font-bold text-lg mb-2">Check your email</h3>
-            <p className="text-gray-400 text-sm mb-1">We sent a sign-in link to</p>
+            <p className="text-gray-400 text-sm mb-1">{resetSent ? 'We sent a password reset link to' : 'We sent a sign-in link to'}</p>
             <p className="text-white font-bold text-sm mb-6">{email}</p>
-            <button onClick={() => setMagicLinkSent(false)} className="text-gray-500 text-xs hover:text-white transition-colors">
-              Try a different method
+            <button onClick={() => { setMagicLinkSent(false); setResetSent(false); setMode('login'); }} className="text-gray-500 text-xs hover:text-white transition-colors">
+              Back to login
             </button>
           </div>
         ) : (
@@ -100,7 +108,7 @@ export const AuthScreen = ({ onAuth, onGoogle, onMagicLink, loading, error }) =>
                 />
               </div>
 
-              {mode !== 'magic' && (
+              {mode !== 'magic' && mode !== 'forgot' && (
                 <div className="relative">
                   <Lock size={16} className="absolute left-3 top-3.5 text-gray-600" />
                   <input
@@ -123,17 +131,25 @@ export const AuthScreen = ({ onAuth, onGoogle, onMagicLink, loading, error }) =>
 
               <button
                 type="submit"
-                disabled={(mode === 'magic' ? magicSending : loading) || !email || (mode !== 'magic' && !password)}
+                disabled={((mode === 'magic' || mode === 'forgot') ? magicSending : loading) || !email || (mode !== 'magic' && mode !== 'forgot' && !password)}
                 className="w-full accent-bg text-white font-bold py-3 rounded-xl transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {(mode === 'magic' ? magicSending : loading) ? <Loader2 size={18} className="animate-spin" /> : null}
-                {mode === 'signup' ? 'SIGN UP' : mode === 'magic' ? 'SEND MAGIC LINK' : 'LOG IN'}
+                {((mode === 'magic' || mode === 'forgot') ? magicSending : loading) ? <Loader2 size={18} className="animate-spin" /> : null}
+                {mode === 'signup' ? 'SIGN UP' : mode === 'magic' ? 'SEND MAGIC LINK' : mode === 'forgot' ? 'SEND RESET LINK' : 'LOG IN'}
               </button>
             </form>
 
             {/* Mode switchers */}
             <div className="mt-5 space-y-2 text-center">
-              {mode !== 'magic' && (
+              {mode === 'login' && (
+                <button
+                  onClick={() => setMode('forgot')}
+                  className="text-gray-500 text-xs hover:text-white transition-colors block mx-auto"
+                >
+                  Forgot password?
+                </button>
+              )}
+              {mode !== 'magic' && mode !== 'forgot' && (
                 <button
                   onClick={() => setMode('magic')}
                   className="text-gray-500 text-xs hover:text-white transition-colors flex items-center justify-center gap-1.5 mx-auto"
@@ -141,20 +157,22 @@ export const AuthScreen = ({ onAuth, onGoogle, onMagicLink, loading, error }) =>
                   <Wand2 size={12}/> Sign in with magic link (no password)
                 </button>
               )}
-              {mode === 'magic' && (
+              {(mode === 'magic' || mode === 'forgot') && (
                 <button
                   onClick={() => setMode('login')}
                   className="text-gray-500 text-xs hover:text-white transition-colors"
                 >
-                  Sign in with password instead
+                  Back to login
                 </button>
               )}
-              <button
-                onClick={() => setMode(mode === 'signup' ? 'login' : 'signup')}
-                className="text-gray-500 text-xs hover:text-white transition-colors block mx-auto"
-              >
-                {mode === 'signup' ? 'Already have an account? Log in' : "Don't have an account? Sign up"}
-              </button>
+              {mode !== 'forgot' && (
+                <button
+                  onClick={() => setMode(mode === 'signup' ? 'login' : 'signup')}
+                  className="text-gray-500 text-xs hover:text-white transition-colors block mx-auto"
+                >
+                  {mode === 'signup' ? 'Already have an account? Log in' : "Don't have an account? Sign up"}
+                </button>
+              )}
             </div>
           </>
         )}

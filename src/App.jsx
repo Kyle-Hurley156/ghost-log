@@ -8,7 +8,7 @@ import { Capacitor } from '@capacitor/core';
 import { Purchases } from '@revenuecat/purchases-capacitor';
 
 import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, browserLocalPersistence, setPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithCredential, signInWithPopup, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink } from 'firebase/auth';
+import { getAuth, browserLocalPersistence, setPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithCredential, signInWithPopup, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, sendPasswordResetEmail } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
 
 import { FIREBASE_CONFIG, INITIAL_SPLITS, INITIAL_TARGETS } from './constants';
@@ -124,21 +124,27 @@ export default function App() {
   };
 
   // --- INITIALIZATION (FIREBASE & REVENUECAT) ---
+  // Store unsubscribe ref so useEffect cleanup can access it outside the async IIFE
+  const authUnsubscribeRef = useRef(null);
+
   useEffect(() => {
-    const setupRevenueCat = async () => {
+    const setupRevenueCat = async (firebaseUid) => {
       if (CapacitorFallback.isNativePlatform()) {
         try {
           const platform = CapacitorFallback.getPlatform();
           const rcKey = platform === 'ios' ? import.meta.env?.VITE_RC_APPLE_KEY : import.meta.env?.VITE_RC_GOOGLE_KEY;
           if (rcKey) {
             await PurchasesFallback.configure({ apiKey: rcKey });
+            // Link RevenueCat to Firebase UID so purchases follow the user across devices
+            if (firebaseUid) {
+              try { await PurchasesFallback.logIn({ appUserID: firebaseUid }); } catch (_) {}
+            }
             const info = await PurchasesFallback.getCustomerInfo();
             if (typeof info.entitlements.active['pro'] !== "undefined") setIsPro(true);
           }
         } catch (e) { console.error("RevenueCat Init Error", e); }
       }
     };
-    setupRevenueCat();
 
     // Safety net: if auth hasn't resolved in 5s, stop waiting
     const authTimeout = setTimeout(() => {
@@ -165,7 +171,15 @@ export default function App() {
                 await signInWithEmailLink(auth, email, window.location.href);
                 window.localStorage.removeItem('ghostlog_magic_email');
                 window.history.replaceState(null, '', window.location.origin);
-              } catch (e) { console.error('Magic link sign-in failed', e); }
+              } catch (e) {
+                console.error('Magic link sign-in failed', e);
+                const code = e?.code || '';
+                if (code === 'auth/invalid-action-code' || code === 'auth/expired-action-code') {
+                  setAuthError('This magic link has expired. Please request a new one.');
+                } else {
+                  setAuthError('Magic link sign-in failed. Please try again.');
+                }
+              }
             }
           }
 
@@ -175,14 +189,18 @@ export default function App() {
               setCloudUser(user);
               setCloudStatus('synced');
               await loadCloudData(user.uid);
+              // Init RevenueCat with Firebase UID after auth resolves
+              setupRevenueCat(user.uid);
             } else {
               setCloudUser(null);
               setCloudStatus('disconnected');
+              setIsPro(false);
               setDataLoaded(false);
             }
             setAuthLoading(false);
           });
-          return () => unsubscribe();
+          // Store ref so useEffect cleanup can call it
+          authUnsubscribeRef.current = unsubscribe;
         } catch (e) {
           console.error("Firebase Init Failed", e);
           clearTimeout(authTimeout);
@@ -194,7 +212,10 @@ export default function App() {
       setAuthLoading(false);
     }
 
-    return () => clearTimeout(authTimeout);
+    return () => {
+      clearTimeout(authTimeout);
+      if (authUnsubscribeRef.current) authUnsubscribeRef.current();
+    };
   }, []);
 
   // --- AUTH HANDLERS ---
@@ -263,6 +284,21 @@ export default function App() {
       return true; // signal success to show confirmation
     } catch (e) {
       setAuthError('Failed to send magic link: ' + (e?.message || ''));
+      return false;
+    }
+  };
+
+  const handleForgotPassword = async (email) => {
+    setAuthError(null);
+    try {
+      const auth = getAuth();
+      await sendPasswordResetEmail(auth, email);
+      return true;
+    } catch (e) {
+      const code = e?.code || '';
+      if (code === 'auth/user-not-found') setAuthError('No account found with this email');
+      else if (code === 'auth/invalid-email') setAuthError('Invalid email address');
+      else setAuthError('Failed to send reset email. Try again.');
       return false;
     }
   };
@@ -385,7 +421,9 @@ export default function App() {
     try {
       const offerings = await PurchasesFallback.getOfferings();
       if (offerings.current !== null && offerings.current.availablePackages.length !== 0) {
-        const { customerInfo } = await PurchasesFallback.purchasePackage({ aPackage: offerings.current.monthly });
+        // Use .monthly if available, otherwise fall back to first available package
+        const pkg = offerings.current.monthly || offerings.current.availablePackages[0];
+        const { customerInfo } = await PurchasesFallback.purchasePackage({ aPackage: pkg });
         if (typeof customerInfo.entitlements.active['pro'] !== "undefined") {
           setIsPro(true);
           setShowPaywall(false);
@@ -396,6 +434,27 @@ export default function App() {
       }
     } catch (e) {
       if (!e.userCancelled) setToastMsg("Purchase failed. Try again.");
+    }
+    setIsPaywallLoading(false);
+  };
+
+  const handleRestorePurchases = async () => {
+    if (!CapacitorFallback.isNativePlatform()) {
+      setToastMsg("Restore is only available on mobile devices.");
+      return;
+    }
+    setIsPaywallLoading(true);
+    try {
+      const info = await PurchasesFallback.restorePurchases();
+      if (typeof info.customerInfo.entitlements.active['pro'] !== "undefined") {
+        setIsPro(true);
+        setShowPaywall(false);
+        setToastMsg("Pro restored successfully!");
+      } else {
+        setToastMsg("No active subscription found.");
+      }
+    } catch (e) {
+      setToastMsg("Restore failed. Try again.");
     }
     setIsPaywallLoading(false);
   };
@@ -465,7 +524,7 @@ export default function App() {
   if (!cloudUser && !authLoading) {
     return (
       <ErrorBoundary>
-        <AuthScreen onAuth={handleAuth} onGoogle={handleGoogleSignIn} onMagicLink={handleMagicLink} loading={authLoading} error={authError} />
+        <AuthScreen onAuth={handleAuth} onGoogle={handleGoogleSignIn} onMagicLink={handleMagicLink} onForgotPassword={handleForgotPassword} loading={authLoading} error={authError} />
       </ErrorBoundary>
     );
   }
@@ -521,7 +580,7 @@ export default function App() {
           </button>
         )}
 
-        <PaywallModal isOpen={showPaywall} onClose={() => setShowPaywall(false)} onSubscribe={handleSubscribeClick} loading={isPaywallLoading}/>
+        <PaywallModal isOpen={showPaywall} onClose={() => setShowPaywall(false)} onSubscribe={handleSubscribeClick} onRestore={handleRestorePurchases} loading={isPaywallLoading}/>
 
         {/* HEADER */}
         <div className="bg-gray-950 border-b border-gray-800/50 px-4 pb-4 pt-14 fixed top-0 left-0 right-0 z-20 max-w-md mx-auto safe-area-top">

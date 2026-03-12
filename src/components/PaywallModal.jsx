@@ -1,7 +1,7 @@
 import React from 'react';
 import { X, ChefHat, Wand2, BarChart3, Loader2, Sparkles, Crown } from 'lucide-react';
 
-export const PaywallModal = ({ isOpen, onClose, onSubscribe, loading }) => {
+export const PaywallModal = ({ isOpen, onClose, onSubscribe, onRestore, loading }) => {
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 bg-black/95 z-[80] flex items-center justify-center p-4 animate-in fade-in zoom-in-95">
@@ -36,9 +36,11 @@ export const PaywallModal = ({ isOpen, onClose, onSubscribe, loading }) => {
           {loading ? <Loader2 className="animate-spin"/> : "SUBSCRIBE — $9.70/MO"}
         </button>
         <div className="mt-4 flex justify-center gap-4 text-[10px] font-bold text-gray-600 uppercase tracking-wider">
-          <button className="hover:text-gray-400 transition-colors">Restore</button>
+          <button onClick={onRestore} disabled={loading} className="hover:text-gray-400 transition-colors disabled:opacity-50">Restore</button>
           <span>·</span>
-          <button className="hover:text-gray-400 transition-colors">Terms</button>
+          <button onClick={() => window.open('https://ghost-log.vercel.app/terms', '_blank')} className="hover:text-gray-400 transition-colors">Terms</button>
+          <span>·</span>
+          <button onClick={() => window.open('https://ghost-log.vercel.app/privacy', '_blank')} className="hover:text-gray-400 transition-colors">Privacy</button>
         </div>
       </div>
     </div>
