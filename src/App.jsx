@@ -664,21 +664,21 @@ export default function App() {
   const dailyTotals = dailyLog.reduce((acc, item) => ({ cal: acc.cal + item.totalCals, p: acc.p + item.totalP, c: acc.c + item.totalC, f: acc.f + item.totalF }), { cal: 0, p: 0, c: 0, f: 0 });
   const currentTargets = userTargets[phase] || INITIAL_TARGETS.CUT;
 
-  // Show auth screen if not logged in
-  if (!cloudUser && !authLoading) {
-    return (
-      <ErrorBoundary>
-        <AuthScreen onAuth={handleAuth} onGoogle={handleGoogleSignIn} onMagicLink={handleMagicLink} onForgotPassword={handleForgotPassword} onResetConfirm={handleResetConfirm} pendingReset={pendingPasswordReset} onCancelReset={() => setPendingPasswordReset(null)} loading={authLoading} error={authError} />
-      </ErrorBoundary>
-    );
-  }
-
-  // Show loading while checking auth state
-  if (authLoading) {
+  // Show loading only while checking INITIAL auth state (before we know if user is logged in)
+  if (authLoading && !cloudUser) {
     return (
       <div className="bg-black min-h-screen flex items-center justify-center">
         <Loader2 size={32} className="animate-spin accent-text" />
       </div>
+    );
+  }
+
+  // Show auth screen if not logged in
+  if (!cloudUser) {
+    return (
+      <ErrorBoundary>
+        <AuthScreen onAuth={handleAuth} onGoogle={handleGoogleSignIn} onMagicLink={handleMagicLink} onForgotPassword={handleForgotPassword} onResetConfirm={handleResetConfirm} pendingReset={pendingPasswordReset} onCancelReset={() => setPendingPasswordReset(null)} loading={authLoading} error={authError} />
+      </ErrorBoundary>
     );
   }
 
