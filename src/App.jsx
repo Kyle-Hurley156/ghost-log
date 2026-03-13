@@ -250,27 +250,40 @@ export default function App() {
         // The standard @capacitor/browser uses SFSafariViewController which
         // blocks custom URL scheme deep links. ASWebAuthenticationSession
         // has a built-in callbackURLScheme parameter that works.
-        const { registerPlugin } = await import('@capacitor/core');
-        const WebAuth = registerPlugin('WebAuth');
-        const result = await WebAuth.start({
-          url: 'https://ghost-log.vercel.app/auth-redirect.html',
-          callbackScheme: 'com.ghostlog.app'
-        });
-        // result.url = "com.ghostlog.app://google-auth?idToken=...&accessToken=..."
-        const callbackUrl = result.url || '';
-        console.log('WebAuth callback:', callbackUrl);
-        const qs = callbackUrl.split('?')[1] || '';
-        const params = new URLSearchParams(qs);
-        const idToken = params.get('idToken') || null;
-        const accessToken = params.get('accessToken') || null;
-        if (idToken || accessToken) {
-          const auth = getAuth();
-          const credential = GoogleAuthProvider.credential(idToken, accessToken);
-          await signInWithCredential(auth, credential);
-        } else {
-          setAuthError('No token received from Google sign-in');
+        try {
+          const { registerPlugin } = await import('@capacitor/core');
+          const WebAuth = registerPlugin('WebAuth');
+          const result = await WebAuth.start({
+            url: 'https://ghost-log.vercel.app/auth-redirect.html',
+            callbackScheme: 'com.ghostlog.app'
+          });
+          // result.url = "com.ghostlog.app://google-auth?idToken=...&accessToken=..."
+          const callbackUrl = result.url || '';
+          console.log('WebAuth callback:', callbackUrl);
+          const qs = callbackUrl.split('?')[1] || '';
+          const params = new URLSearchParams(qs);
+          const idToken = params.get('idToken') || null;
+          const accessToken = params.get('accessToken') || null;
+          if (idToken || accessToken) {
+            const auth = getAuth();
+            const credential = GoogleAuthProvider.credential(idToken, accessToken);
+            await signInWithCredential(auth, credential);
+          } else {
+            setAuthError('No token received from Google sign-in');
+          }
+          setAuthLoading(false);
+        } catch (pluginErr) {
+          // WebAuth plugin not available (e.g. older TestFlight build) — fall back to Browser
+          if (String(pluginErr).includes('UNIMPLEMENTED') || String(pluginErr).includes('not implemented')) {
+            console.warn('WebAuth plugin not available, falling back to Browser plugin');
+            googleAuthPending.current = true;
+            const { Browser } = await import('@capacitor/browser');
+            await Browser.open({ url: 'https://ghost-log.vercel.app/auth-redirect.html' });
+            // Auth completion handled by appUrlOpen listener (may not work on older iOS builds)
+          } else {
+            throw pluginErr;
+          }
         }
-        setAuthLoading(false);
       } else if (platform === 'android') {
         // Android: deep links work fine with @capacitor/browser + SFSafariViewController
         googleAuthPending.current = true;
