@@ -1,6 +1,7 @@
 {
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/__/auth/action", "destination": "/auth-action.html" },
     { "source": "/__/auth/(.*)", "destination": "https://ghost-log.firebaseapp.com/__/auth/$1" },
     { "source": "/((?!api/|__/).*)", "destination": "/index.html" }
   ]

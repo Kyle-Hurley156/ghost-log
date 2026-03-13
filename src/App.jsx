@@ -188,16 +188,16 @@ export default function App() {
             if (user) {
               setCloudUser(user);
               setCloudStatus('synced');
-              await loadCloudData(user.uid);
-              // Init RevenueCat with Firebase UID after auth resolves
+              setAuthLoading(false); // Show app immediately — don't wait for data
+              loadCloudData(user.uid); // Load data async in background
               setupRevenueCat(user.uid);
             } else {
               setCloudUser(null);
               setCloudStatus('disconnected');
               setIsPro(false);
               setDataLoaded(false);
+              setAuthLoading(false);
             }
-            setAuthLoading(false);
           });
           // Store ref so useEffect cleanup can call it
           authUnsubscribeRef.current = unsubscribe;
@@ -344,7 +344,11 @@ export default function App() {
     setAuthError(null);
     try {
       const auth = getAuth();
-      await sendPasswordResetEmail(auth, email);
+      const actionCodeSettings = {
+        url: 'https://ghost-log.vercel.app/',
+        handleCodeInApp: false,
+      };
+      await sendPasswordResetEmail(auth, email, actionCodeSettings);
       return true;
     } catch (e) {
       const code = e?.code || '';

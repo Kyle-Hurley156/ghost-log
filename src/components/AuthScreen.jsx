@@ -88,7 +88,11 @@ export const AuthScreen = ({ onAuth, onGoogle, onMagicLink, onForgotPassword, lo
             </div>
             <h3 className="text-white font-bold text-lg mb-2">Check your email</h3>
             <p className="text-gray-400 text-sm mb-1">{resetSent ? 'We sent a password reset link to' : 'We sent a sign-in link to'}</p>
-            <p className="text-white font-bold text-sm mb-6">{email}</p>
+            <p className="text-white font-bold text-sm mb-4">{email}</p>
+            <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg px-4 py-3 mb-6">
+              <p className="text-yellow-400 text-xs font-semibold mb-1">Can't find it?</p>
+              <p className="text-yellow-400/80 text-[11px]">Check your <strong>spam/junk folder</strong> — the email may be filtered there.</p>
+            </div>
             <button onClick={() => { setMagicLinkSent(false); setResetSent(false); setMode('login'); }} className="text-gray-500 text-xs hover:text-white transition-colors">
               Back to login
             </button>
