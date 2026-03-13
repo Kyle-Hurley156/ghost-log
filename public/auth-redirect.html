@@ -54,7 +54,7 @@
   </div>
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
-    import { getAuth, GoogleAuthProvider, signInWithPopup } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+    import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
     const config = {
       apiKey: "AIzaSyAH3L6UcFaXos3AT3o8W8EHsgWBbL8_ZA4",
@@ -70,17 +70,6 @@
     const $ = id => document.getElementById(id);
 
     let deepLinkUrl = '';
-
-    function buildDeepLink(result) {
-      const cred = GoogleAuthProvider.credentialFromResult(result);
-      const idToken = cred?.idToken || '';
-      const accessToken = cred?.accessToken || '';
-      if (!idToken && !accessToken) return null;
-      const params = new URLSearchParams();
-      if (idToken) params.set('idToken', idToken);
-      if (accessToken) params.set('accessToken', accessToken);
-      return 'com.ghostlog.app://google-auth?' + params.toString();
-    }
 
     function deepLinkBack(url) {
       deepLinkUrl = url;
@@ -109,46 +98,41 @@
       $('status').textContent = msg || 'Tap to sign in';
     }
 
-    async function doPopupSignIn() {
-      $('google-btn').classList.add('hidden');
-      $('spinner').classList.remove('hidden');
-      $('status').textContent = 'Signing in...';
-      $('error').textContent = '';
-      const provider = new GoogleAuthProvider();
-      try {
-        const result = await signInWithPopup(auth, provider);
-        const url = buildDeepLink(result);
-        if (url) {
-          deepLinkBack(url);
+    // Check for redirect result first (user is returning from Google sign-in)
+    try {
+      const result = await getRedirectResult(auth);
+      if (result) {
+        const cred = GoogleAuthProvider.credentialFromResult(result);
+        const idToken = cred?.idToken || '';
+        const accessToken = cred?.accessToken || '';
+        if (idToken || accessToken) {
+          const params = new URLSearchParams();
+          if (idToken) params.set('idToken', idToken);
+          if (accessToken) params.set('accessToken', accessToken);
+          deepLinkBack('com.ghostlog.app://google-auth?' + params.toString());
         } else {
           $('error').textContent = 'Could not get credentials from Google. Try again.';
           showRetry('Tap to try again');
         }
-      } catch (e) {
-        if (e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request' || e.code === 'auth/popup-blocked') {
-          showRetry('Tap to sign in');
-        } else {
-          $('error').textContent = 'Sign-in failed: ' + (e.message || e);
-          showRetry('Tap to try again');
-        }
+      } else {
+        // No redirect result — show sign-in button
+        showRetry('Tap to sign in with Google');
       }
+    } catch (e) {
+      console.error('Redirect result error:', e);
+      $('error').textContent = 'Sign-in failed: ' + (e.message || e);
+      showRetry('Tap to try again');
     }
 
-    // On mobile/in-app browsers, popups without user gesture are blocked.
-    // Show the button immediately so the user taps it (user gesture = popup allowed).
-    const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
-    if (isMobile) {
-      showRetry('Tap to sign in with Google');
-    } else {
-      // Desktop: auto-trigger popup
-      try {
-        await doPopupSignIn();
-      } catch (_) {
-        showRetry('Tap to sign in');
-      }
-    }
-
-    $('google-btn').addEventListener('click', doPopupSignIn);
+    // When user taps the button, use signInWithRedirect (works in all browsers including ASWebAuthenticationSession)
+    $('google-btn').addEventListener('click', () => {
+      $('google-btn').classList.add('hidden');
+      $('spinner').classList.remove('hidden');
+      $('status').textContent = 'Redirecting to Google...';
+      $('error').textContent = '';
+      const provider = new GoogleAuthProvider();
+      signInWithRedirect(auth, provider);
+    });
   </script>
 </body>
 </html>
