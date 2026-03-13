@@ -366,19 +366,18 @@ export default function App() {
       try {
         const { App: CapApp } = await import('@capacitor/app');
 
-        // On Android, reset authLoading if user dismisses browser without completing Google auth
-        if (CapacitorFallback.getPlatform() === 'android') {
-          try {
-            const { Browser } = await import('@capacitor/browser');
-            browserCleanup = await Browser.addListener('browserFinished', () => {
-              setTimeout(() => {
-                if (!googleAuthPending.current) return;
-                googleAuthPending.current = false;
-                setAuthLoading(false);
-              }, 1500);
-            });
-          } catch (_) {}
-        }
+        // Reset authLoading if user dismisses browser without completing Google auth
+        // (works on both Android and iOS Browser plugin fallback)
+        try {
+          const { Browser } = await import('@capacitor/browser');
+          browserCleanup = await Browser.addListener('browserFinished', () => {
+            setTimeout(() => {
+              if (!googleAuthPending.current) return;
+              googleAuthPending.current = false;
+              setAuthLoading(false);
+            }, 1500);
+          });
+        } catch (_) {}
 
         deepLinkCleanup = await CapApp.addListener('appUrlOpen', async ({ url }) => {
           console.log('Deep link received:', url);

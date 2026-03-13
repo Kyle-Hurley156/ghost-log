@@ -54,7 +54,7 @@
   </div>
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
-    import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
     const config = {
       apiKey: "AIzaSyAH3L6UcFaXos3AT3o8W8EHsgWBbL8_ZA4",
@@ -70,6 +70,21 @@
     const $ = id => document.getElementById(id);
 
     let deepLinkUrl = '';
+
+    function handleAuthResult(result) {
+      const cred = GoogleAuthProvider.credentialFromResult(result);
+      const idToken = cred?.idToken || '';
+      const accessToken = cred?.accessToken || '';
+      if (idToken || accessToken) {
+        const params = new URLSearchParams();
+        if (idToken) params.set('idToken', idToken);
+        if (accessToken) params.set('accessToken', accessToken);
+        deepLinkBack('com.ghostlog.app://google-auth?' + params.toString());
+      } else {
+        $('error').textContent = 'Could not get credentials from Google. Try again.';
+        showRetry('Tap to try again');
+      }
+    }
 
     function deepLinkBack(url) {
       deepLinkUrl = url;
@@ -98,22 +113,11 @@
       $('status').textContent = msg || 'Tap to sign in';
     }
 
-    // Check for redirect result first (user is returning from Google sign-in)
+    // Check for redirect result first (user returning from Google sign-in via redirect flow)
     try {
       const result = await getRedirectResult(auth);
       if (result) {
-        const cred = GoogleAuthProvider.credentialFromResult(result);
-        const idToken = cred?.idToken || '';
-        const accessToken = cred?.accessToken || '';
-        if (idToken || accessToken) {
-          const params = new URLSearchParams();
-          if (idToken) params.set('idToken', idToken);
-          if (accessToken) params.set('accessToken', accessToken);
-          deepLinkBack('com.ghostlog.app://google-auth?' + params.toString());
-        } else {
-          $('error').textContent = 'Could not get credentials from Google. Try again.';
-          showRetry('Tap to try again');
-        }
+        handleAuthResult(result);
       } else {
         // No redirect result — show sign-in button
         showRetry('Tap to sign in with Google');
@@ -124,14 +128,34 @@
       showRetry('Tap to try again');
     }
 
-    // When user taps the button, use signInWithRedirect (works in all browsers including ASWebAuthenticationSession)
-    $('google-btn').addEventListener('click', () => {
+    // When user taps the button: try popup first (faster), fall back to redirect
+    $('google-btn').addEventListener('click', async () => {
       $('google-btn').classList.add('hidden');
       $('spinner').classList.remove('hidden');
-      $('status').textContent = 'Redirecting to Google...';
+      $('status').textContent = 'Signing in with Google...';
       $('error').textContent = '';
+
       const provider = new GoogleAuthProvider();
-      signInWithRedirect(auth, provider);
+
+      try {
+        // Try popup first — works in regular browsers and SFSafariViewController
+        const result = await signInWithPopup(auth, provider);
+        handleAuthResult(result);
+      } catch (e) {
+        const code = e?.code || '';
+        if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment' || code === 'auth/internal-error') {
+          // Popup not available — fall back to redirect (works in ASWebAuthenticationSession)
+          $('status').textContent = 'Redirecting to Google...';
+          signInWithRedirect(auth, provider);
+        } else if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+          // User cancelled — let them try again
+          showRetry('Tap to sign in with Google');
+        } else {
+          console.error('Sign-in error:', e);
+          $('error').textContent = (e?.message || 'Sign-in failed. Please try again.');
+          showRetry('Tap to try again');
+        }
+      }
     });
   </script>
 </body>
