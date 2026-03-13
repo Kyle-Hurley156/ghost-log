@@ -22,6 +22,42 @@
     <!-- Styles are compiled from index.css via PostCSS/Tailwind at build time -->
   </head>
   <body>
+    <!--
+      Magic link redirect: when a user clicks a magic link email on iOS,
+      Safari opens ghost-log.vercel.app/?finishSignIn=true&oobCode=...
+      We need to bounce them into the native app via custom URL scheme.
+      This script runs before React to avoid a flash of the web app.
+    -->
+    <script>
+      (function() {
+        var qs = window.location.search;
+        if (qs.indexOf('finishSignIn=true') === -1) return;
+        // Only redirect if we're on the deployed Vercel domain (i.e. Safari, not Capacitor webview)
+        var isVercel = window.location.hostname === 'ghost-log.vercel.app';
+        if (!isVercel) return;
+        // Build deep link: pass the full current URL so the app can call signInWithEmailLink
+        var deepLink = 'com.ghostlog.app://magic-link?url=' + encodeURIComponent(window.location.href);
+        // Show a nice redirect UI
+        document.title = 'GhostLog - Opening App...';
+        document.write(
+          '<div style="background:#000;color:#fff;font-family:-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;text-align:center;padding:20px;">' +
+          '<div>' +
+          '<svg width="48" height="48" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+          '<path d="M50 8C30 8 18 24 18 42v32c0 4 2 8 6 8s6-4 6-8v-4c0-4 2-8 6-8s6 4 6 8v4c0 4 2 8 6 8s6-4 6-8v-4c0-4 2-8 6-8s6 4 6 8v4c0 4 2 8 6 8s6-4 6-8V42C82 24 70 8 50 8z" fill="white"/>' +
+          '<circle cx="38" cy="38" r="5" fill="black"/><circle cx="62" cy="38" r="5" fill="black"/>' +
+          '<ellipse cx="50" cy="52" rx="4" ry="3" fill="black"/></svg>' +
+          '<div style="margin-top:16px;font-size:14px;color:#888;">Opening GhostLog...</div>' +
+          '<a id="ml-open" href="' + deepLink + '" style="display:inline-block;margin-top:20px;background:#3b82f6;color:#fff;padding:14px 28px;border-radius:12px;text-decoration:none;font-weight:600;font-size:15px;">Open GhostLog</a>' +
+          '<div style="margin-top:16px;font-size:12px;color:#555;">If the app doesn\'t open, tap the button above.</div>' +
+          '</div></div>'
+        );
+        document.close();
+        // Auto-redirect after a small delay
+        setTimeout(function() { window.location.href = deepLink; }, 300);
+        // Stop further page load (React, etc)
+        window.stop();
+      })();
+    </script>
     <div id="root"></div>
     <!-- Visible loading fallback (works without CSS/JS bundles) -->
     <div id="app-loader" style="position:fixed;inset:0;background:#000;display:flex;align-items:center;justify-content:center;z-index:9999;">

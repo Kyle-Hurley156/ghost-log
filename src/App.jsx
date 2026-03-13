@@ -244,13 +244,39 @@ export default function App() {
     setAuthLoading(true);
     setAuthError(null);
     try {
-      if (CapacitorFallback.isNativePlatform()) {
-        // Native: open Google sign-in in system browser, token returns via deep link
+      const platform = CapacitorFallback.getPlatform();
+      if (platform === 'ios') {
+        // iOS: Use ASWebAuthenticationSession via custom WebAuth plugin.
+        // The standard @capacitor/browser uses SFSafariViewController which
+        // blocks custom URL scheme deep links. ASWebAuthenticationSession
+        // has a built-in callbackURLScheme parameter that works.
+        const { registerPlugin } = await import('@capacitor/core');
+        const WebAuth = registerPlugin('WebAuth');
+        const result = await WebAuth.start({
+          url: 'https://ghost-log.vercel.app/auth-redirect.html',
+          callbackScheme: 'com.ghostlog.app'
+        });
+        // result.url = "com.ghostlog.app://google-auth?idToken=...&accessToken=..."
+        const callbackUrl = result.url || '';
+        console.log('WebAuth callback:', callbackUrl);
+        const qs = callbackUrl.split('?')[1] || '';
+        const params = new URLSearchParams(qs);
+        const idToken = params.get('idToken') || null;
+        const accessToken = params.get('accessToken') || null;
+        if (idToken || accessToken) {
+          const auth = getAuth();
+          const credential = GoogleAuthProvider.credential(idToken, accessToken);
+          await signInWithCredential(auth, credential);
+        } else {
+          setAuthError('No token received from Google sign-in');
+        }
+        setAuthLoading(false);
+      } else if (platform === 'android') {
+        // Android: deep links work fine with @capacitor/browser + SFSafariViewController
         googleAuthPending.current = true;
         const { Browser } = await import('@capacitor/browser');
         await Browser.open({ url: 'https://ghost-log.vercel.app/auth-redirect.html' });
-        // Auth completion is handled by the appUrlOpen listener (see useEffect below)
-        // Don't set authLoading false here — the listener will handle it
+        // Auth completion is handled by the appUrlOpen listener
       } else {
         // Web: use Firebase popup directly
         const auth = getAuth();
@@ -259,7 +285,9 @@ export default function App() {
       }
     } catch (e) {
       const msg = e?.message || '';
-      if (e?.code !== 'auth/popup-closed-by-user' && !msg.includes('canceled') && !msg.includes('cancelled')) {
+      const code = e?.code || e || '';
+      // Don't show error for user cancellation
+      if (e?.code !== 'auth/popup-closed-by-user' && !msg.includes('canceled') && !msg.includes('cancelled') && code !== 'CANCELLED') {
         setAuthError('Google sign-in failed');
       }
       setAuthLoading(false);
@@ -314,7 +342,7 @@ export default function App() {
 
   // Magic link completion is handled inside Firebase init useEffect above
 
-  // Listen for deep link from Google Sign-In browser redirect
+  // Listen for deep links (Google auth fallback + magic link from Safari redirect)
   const googleAuthPending = useRef(false);
   useEffect(() => {
     if (!CapacitorFallback.isNativePlatform()) return;
@@ -322,14 +350,28 @@ export default function App() {
     (async () => {
       try {
         const { App: CapApp } = await import('@capacitor/app');
-        const { Browser } = await import('@capacitor/browser');
+
+        // On Android, reset authLoading if user dismisses browser without completing Google auth
+        if (CapacitorFallback.getPlatform() === 'android') {
+          try {
+            const { Browser } = await import('@capacitor/browser');
+            browserCleanup = await Browser.addListener('browserFinished', () => {
+              setTimeout(() => {
+                if (!googleAuthPending.current) return;
+                googleAuthPending.current = false;
+                setAuthLoading(false);
+              }, 1500);
+            });
+          } catch (_) {}
+        }
 
         deepLinkCleanup = await CapApp.addListener('appUrlOpen', async ({ url }) => {
           console.log('Deep link received:', url);
+
+          // Handle Google auth deep link (legacy/Android fallback)
           if (url.includes('google-auth')) {
             googleAuthPending.current = false;
             try {
-              // Parse tokens from deep link — avoid new URL() which can fail with custom schemes
               const qs = url.split('?')[1] || '';
               const params = new URLSearchParams(qs);
               const idToken = params.get('idToken') || null;
@@ -348,18 +390,48 @@ export default function App() {
               setAuthError('Google sign-in failed: ' + (e?.message || ''));
             }
             setAuthLoading(false);
-            try { Browser.close(); } catch (_) {}
+            try { const { Browser } = await import('@capacitor/browser'); Browser.close(); } catch (_) {}
           }
-        });
 
-        // Only reset loading if user dismissed browser without completing Google auth
-        browserCleanup = await Browser.addListener('browserFinished', () => {
-          // Delay slightly — on iOS the deep link event can arrive just after browserFinished
-          setTimeout(() => {
-            if (!googleAuthPending.current) return;
-            googleAuthPending.current = false;
+          // Handle magic link deep link from Safari redirect
+          // URL format: com.ghostlog.app://magic-link?url=<encoded-firebase-magic-link-url>
+          if (url.includes('magic-link')) {
+            console.log('Magic link deep link received');
+            setAuthLoading(true);
+            try {
+              const qs = url.split('?')[1] || '';
+              const params = new URLSearchParams(qs);
+              const magicUrl = params.get('url');
+              console.log('Magic link URL:', magicUrl);
+              if (magicUrl) {
+                const auth = getAuth();
+                if (isSignInWithEmailLink(auth, magicUrl)) {
+                  let email = window.localStorage.getItem('ghostlog_magic_email');
+                  if (!email) email = window.prompt('Enter your email to confirm sign-in:');
+                  if (email) {
+                    await signInWithEmailLink(auth, email, magicUrl);
+                    window.localStorage.removeItem('ghostlog_magic_email');
+                    console.log('Magic link sign-in success');
+                  } else {
+                    setAuthError('Email is required to complete sign-in.');
+                  }
+                } else {
+                  setAuthError('Invalid magic link. Please request a new one.');
+                }
+              } else {
+                setAuthError('No magic link URL received.');
+              }
+            } catch (e) {
+              console.error('Magic link deep link auth failed', e);
+              const code = e?.code || '';
+              if (code === 'auth/invalid-action-code' || code === 'auth/expired-action-code') {
+                setAuthError('This magic link has expired. Please request a new one.');
+              } else {
+                setAuthError('Magic link sign-in failed: ' + (e?.message || ''));
+              }
+            }
             setAuthLoading(false);
-          }, 1500);
+          }
         });
       } catch (e) { console.error('Deep link listener setup failed', e); }
     })();

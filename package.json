@@ -11,7 +11,7 @@
     "android:livereload": "./scripts/android-livereload.sh",
     "android:studio": "./scripts/android-studio.sh",
     "android:sync": "npm run build && npx cap sync android",
-    "ios:sync": "npm run build && npx cap sync ios"
+    "ios:sync": "npm run build && npx cap sync ios && node scripts/ios-post-copy.cjs"
   },
   "dependencies": {
     "@capacitor/android": "^6.2.1",
