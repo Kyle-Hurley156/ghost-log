@@ -32,7 +32,8 @@ export default async function handler(req, res) {
     let body;
     if (isImage) {
       body = {
-        contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: imageData } }] }]
+        contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: imageData } }] }],
+        generationConfig: { thinkingConfig: { thinkingBudget: 0 } }
       };
     } else {
       body = {

@@ -12,10 +12,6 @@
     "StatusBar": {
       "style": "DARK",
       "backgroundColor": "#000000"
-    },
-    "GoogleAuth": {
-      "scopes": ["profile", "email"],
-      "grantOfflineAccess": true
     }
   },
   "ios": {

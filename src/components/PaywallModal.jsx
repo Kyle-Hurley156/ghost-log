@@ -38,9 +38,9 @@ export const PaywallModal = ({ isOpen, onClose, onSubscribe, onRestore, loading 
         <div className="mt-4 flex justify-center gap-4 text-[10px] font-bold text-gray-600 uppercase tracking-wider">
           <button onClick={onRestore} disabled={loading} className="hover:text-gray-400 transition-colors disabled:opacity-50">Restore</button>
           <span>·</span>
-          <button onClick={() => window.open('https://ghost-log.vercel.app/terms', '_blank')} className="hover:text-gray-400 transition-colors">Terms</button>
+          <button onClick={() => window.open('https://ghost-log.vercel.app/terms.html', '_blank')} className="hover:text-gray-400 transition-colors">Terms</button>
           <span>·</span>
-          <button onClick={() => window.open('https://ghost-log.vercel.app/privacy', '_blank')} className="hover:text-gray-400 transition-colors">Privacy</button>
+          <button onClick={() => window.open('https://ghost-log.vercel.app/privacy.html', '_blank')} className="hover:text-gray-400 transition-colors">Privacy</button>
         </div>
       </div>
     </div>

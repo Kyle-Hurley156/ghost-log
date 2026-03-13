@@ -11,6 +11,12 @@ android/build/
 android/app/build/
 android/.idea/
 
+# Capacitor-generated web assets (rebuilt by cap sync in CI)
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+ios/App/App/public/
+
 # iOS Heavy Files
 ios/DerivedData/
 ios/Pods/
