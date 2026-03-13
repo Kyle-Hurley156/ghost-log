@@ -225,11 +225,19 @@ export default function App() {
     setAuthError(null);
     try {
       const auth = getAuth();
+      let result;
       if (isSignUp) {
-        await createUserWithEmailAndPassword(auth, email, password);
+        result = await createUserWithEmailAndPassword(auth, email, password);
       } else {
-        await signInWithEmailAndPassword(auth, email, password);
+        result = await signInWithEmailAndPassword(auth, email, password);
       }
+      // Immediately set user — don't rely solely on onAuthStateChanged (can be delayed on iOS)
+      if (result?.user) {
+        setCloudUser(result.user);
+        setCloudStatus('synced');
+        loadCloudData(result.user.uid);
+      }
+      setAuthLoading(false);
     } catch (e) {
       const code = e?.code || '';
       if (code === 'auth/email-already-in-use') setAuthError('Email already in use');
@@ -268,7 +276,12 @@ export default function App() {
           if (idToken || accessToken) {
             const auth = getAuth();
             const credential = GoogleAuthProvider.credential(idToken, accessToken);
-            await signInWithCredential(auth, credential);
+            const result = await signInWithCredential(auth, credential);
+            if (result?.user) {
+              setCloudUser(result.user);
+              setCloudStatus('synced');
+              loadCloudData(result.user.uid);
+            }
           } else {
             setAuthError('No token received from Google sign-in');
           }
@@ -295,7 +308,13 @@ export default function App() {
         // Web: use Firebase popup directly
         const auth = getAuth();
         const provider = new GoogleAuthProvider();
-        await signInWithPopup(auth, provider);
+        const result = await signInWithPopup(auth, provider);
+        if (result?.user) {
+          setCloudUser(result.user);
+          setCloudStatus('synced');
+          setAuthLoading(false);
+          loadCloudData(result.user.uid);
+        }
       }
     } catch (e) {
       console.error('Google sign-in error:', e?.code, e?.message, e);
@@ -366,7 +385,13 @@ export default function App() {
       const auth = getAuth();
       await confirmPasswordReset(auth, oobCode, newPassword);
       // Auto sign in with the new password
-      await signInWithEmailAndPassword(auth, email, newPassword);
+      const result = await signInWithEmailAndPassword(auth, email, newPassword);
+      if (result?.user) {
+        setCloudUser(result.user);
+        setCloudStatus('synced');
+        setAuthLoading(false);
+        loadCloudData(result.user.uid);
+      }
       setPendingPasswordReset(null);
     } catch (e) {
       const code = e?.code || '';
@@ -420,8 +445,13 @@ export default function App() {
               if (idToken || accessToken) {
                 const auth = getAuth();
                 const credential = GoogleAuthProvider.credential(idToken, accessToken);
-                await signInWithCredential(auth, credential);
+                const result = await signInWithCredential(auth, credential);
                 console.log('signInWithCredential success');
+                if (result?.user) {
+                  setCloudUser(result.user);
+                  setCloudStatus('synced');
+                  loadCloudData(result.user.uid);
+                }
               } else {
                 setAuthError('No token received from Google sign-in');
               }
