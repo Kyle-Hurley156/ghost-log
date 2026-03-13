@@ -8,7 +8,7 @@ import { Capacitor } from '@capacitor/core';
 import { Purchases } from '@revenuecat/purchases-capacitor';
 
 import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, browserLocalPersistence, setPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithCredential, signInWithPopup, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, sendPasswordResetEmail } from 'firebase/auth';
+import { getAuth, browserLocalPersistence, setPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithCredential, signInWithPopup, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, sendPasswordResetEmail, verifyPasswordResetCode, confirmPasswordReset } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
 
 import { FIREBASE_CONFIG, INITIAL_SPLITS, INITIAL_TARGETS } from './constants';
@@ -80,6 +80,7 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [pendingPasswordReset, setPendingPasswordReset] = useState(null); // { oobCode, email }
 
   // APP DATA
   const [workoutEditMode, setWorkoutEditMode] = useState(false);
@@ -359,6 +360,27 @@ export default function App() {
     }
   };
 
+  const handleResetConfirm = async (oobCode, email, newPassword) => {
+    setAuthError(null);
+    try {
+      const auth = getAuth();
+      await confirmPasswordReset(auth, oobCode, newPassword);
+      // Auto sign in with the new password
+      await signInWithEmailAndPassword(auth, email, newPassword);
+      setPendingPasswordReset(null);
+    } catch (e) {
+      const code = e?.code || '';
+      if (code === 'auth/expired-action-code' || code === 'auth/invalid-action-code') {
+        setAuthError('This reset link has expired. Please request a new one.');
+        setPendingPasswordReset(null);
+      } else if (code === 'auth/weak-password') {
+        setAuthError('Password must be at least 6 characters.');
+      } else {
+        setAuthError('Password reset failed: ' + (e?.message || 'Unknown error'));
+      }
+    }
+  };
+
   // Magic link completion is handled inside Firebase init useEffect above
 
   // Listen for deep links (Google auth fallback + magic link from Safari redirect)
@@ -409,6 +431,29 @@ export default function App() {
             }
             setAuthLoading(false);
             try { const { Browser } = await import('@capacitor/browser'); Browser.close(); } catch (_) {}
+          }
+
+          // Handle password reset deep link from email
+          // URL format: com.ghostlog.app://reset-password?oobCode=XXX
+          if (url.includes('reset-password')) {
+            console.log('Password reset deep link received');
+            try {
+              const qs = url.split('?')[1] || '';
+              const params = new URLSearchParams(qs);
+              const oobCode = params.get('oobCode');
+              if (oobCode) {
+                const auth = getAuth();
+                const email = await verifyPasswordResetCode(auth, oobCode);
+                setPendingPasswordReset({ oobCode, email });
+                setAuthLoading(false);
+              } else {
+                setAuthError('Invalid password reset link.');
+              }
+            } catch (e) {
+              console.error('Password reset deep link failed', e);
+              setAuthError('This reset link has expired. Please request a new one.');
+            }
+            setAuthLoading(false);
           }
 
           // Handle magic link deep link from Safari redirect
@@ -623,7 +668,7 @@ export default function App() {
   if (!cloudUser && !authLoading) {
     return (
       <ErrorBoundary>
-        <AuthScreen onAuth={handleAuth} onGoogle={handleGoogleSignIn} onMagicLink={handleMagicLink} onForgotPassword={handleForgotPassword} loading={authLoading} error={authError} />
+        <AuthScreen onAuth={handleAuth} onGoogle={handleGoogleSignIn} onMagicLink={handleMagicLink} onForgotPassword={handleForgotPassword} onResetConfirm={handleResetConfirm} pendingReset={pendingPasswordReset} onCancelReset={() => setPendingPasswordReset(null)} loading={authLoading} error={authError} />
       </ErrorBoundary>
     );
   }

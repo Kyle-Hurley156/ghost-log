@@ -12,26 +12,16 @@
     .brand { font-size: 24px; font-weight: 900; letter-spacing: -0.5px; margin-bottom: 4px; }
     .brand span { color: #666; }
     .subtitle { color: #888; font-size: 13px; margin-bottom: 32px; }
-    .card { background: #111; border: 1px solid #222; border-radius: 16px; padding: 28px 24px; text-align: left; }
-    .card h2 { font-size: 18px; font-weight: 700; margin-bottom: 6px; text-align: center; }
-    .card p { font-size: 13px; color: #888; margin-bottom: 20px; text-align: center; }
-    .field { margin-bottom: 16px; }
-    .field label { display: block; font-size: 12px; font-weight: 600; color: #999; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
-    .field input { width: 100%; background: #0a0a0a; border: 1px solid #333; border-radius: 10px; padding: 12px 14px; color: #fff; font-size: 15px; outline: none; transition: border-color 0.2s; }
-    .field input:focus { border-color: #3b82f6; }
-    .btn { width: 100%; background: #3b82f6; color: #fff; border: none; padding: 14px; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.15s; margin-top: 8px; }
+    .card { background: #111; border: 1px solid #222; border-radius: 16px; padding: 28px 24px; text-align: center; }
+    .card h2 { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+    .card p { font-size: 13px; color: #888; margin-bottom: 20px; }
+    .btn { display: block; width: 100%; background: #3b82f6; color: #fff; border: none; padding: 14px; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.15s; text-decoration: none; text-align: center; }
     .btn:active { transform: scale(0.98); opacity: 0.9; }
-    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .btn-open { background: #22c55e; }
-    .error { color: #ff6b6b; font-size: 13px; margin-top: 12px; text-align: center; }
-    .success-msg { text-align: center; padding: 20px 0; }
-    .success-icon { width: 56px; height: 56px; border-radius: 50%; background: rgba(34,197,94,0.12); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
-    .success-icon svg { width: 28px; height: 28px; }
     .spinner { width: 28px; height: 28px; border: 3px solid #333; border-top-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .pw-strength { height: 3px; border-radius: 3px; margin-top: 6px; transition: all 0.3s; }
-    .hint { font-size: 11px; color: #666; margin-top: 4px; }
-    .open-link { display: block; color: #3b82f6; font-size: 13px; text-decoration: none; margin-top: 16px; text-align: center; }
+    .success-icon { width: 56px; height: 56px; border-radius: 50%; background: rgba(59,130,246,0.12); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
+    .success-icon svg { width: 28px; height: 28px; }
+    .hint { color: #666; font-size: 12px; margin-top: 16px; line-height: 1.5; }
   </style>
 </head>
 <body>
@@ -47,51 +37,42 @@
     <div class="brand">GHOST<span>LOG</span></div>
     <div class="subtitle" id="subtitle">Loading...</div>
 
+    <!-- Loading state -->
     <div id="loading"><div class="spinner"></div></div>
 
-    <!-- Reset Password Form -->
-    <div id="reset-form" style="display:none">
+    <!-- Opening app state -->
+    <div id="open-app" style="display:none">
       <div class="card">
+        <div class="success-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </div>
         <h2>Reset Your Password</h2>
-        <p id="reset-email-display">Enter your new password below</p>
-        <div class="field">
-          <label>New Password</label>
-          <input type="password" id="new-password" placeholder="Enter new password" autocomplete="new-password">
-          <div class="pw-strength" id="pw-strength"></div>
-          <div class="hint">At least 6 characters</div>
-        </div>
-        <div class="field">
-          <label>Confirm Password</label>
-          <input type="password" id="confirm-password" placeholder="Confirm new password" autocomplete="new-password">
-        </div>
-        <button class="btn" id="reset-btn" disabled>Reset Password</button>
-        <div class="error" id="reset-error"></div>
+        <p>Tap below to open GhostLog and set your new password.</p>
+        <a id="open-btn" class="btn" href="#">Open GhostLog</a>
+        <div class="hint">If the button doesn't work, open GhostLog manually — your reset will be waiting.</div>
       </div>
     </div>
 
-    <!-- Success State -->
-    <div id="success-state" style="display:none">
+    <!-- Verify email success -->
+    <div id="verify-success" style="display:none">
       <div class="card">
-        <div class="success-msg">
-          <div class="success-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-          </div>
-          <h2 id="success-title">Password Reset!</h2>
-          <p id="success-detail" style="margin-bottom:0">You can now sign in with your new password.</p>
+        <div class="success-icon" style="background:rgba(34,197,94,0.12)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
         </div>
-        <a href="com.ghostlog.app://auth-complete" class="btn btn-open" id="open-app-btn" style="margin-top:16px;display:block;text-decoration:none;text-align:center">Open GhostLog</a>
+        <h2>Email Verified!</h2>
+        <p style="margin-bottom:0">Your email has been verified. You can close this page and return to GhostLog.</p>
       </div>
     </div>
 
-    <!-- Error State -->
+    <!-- Error state -->
     <div id="error-state" style="display:none">
       <div class="card">
-        <div class="success-msg">
-          <h2 style="color:#ff6b6b">Link Expired</h2>
-          <p>This link has expired or already been used. Please request a new one from the GhostLog app.</p>
-        </div>
+        <h2 style="color:#ff6b6b">Link Expired</h2>
+        <p id="error-msg">This link has expired or already been used. Please request a new one from GhostLog.</p>
       </div>
     </div>
   </div>
@@ -99,145 +80,84 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script>
-    var FIREBASE_CONFIG = {
+    firebase.initializeApp({
       apiKey: 'AIzaSyAH3L6UcFaXos3AT3o8W8EHsgWBbL8_ZA4',
       authDomain: 'ghost-log.vercel.app',
       projectId: 'ghost-log'
-    };
-
-    firebase.initializeApp(FIREBASE_CONFIG);
+    });
     var auth = firebase.auth();
 
     function $(id) { return document.getElementById(id); }
 
-    // Parse URL parameters
     var params = new URLSearchParams(window.location.search);
     var mode = params.get('mode');
     var oobCode = params.get('oobCode');
 
     function showError(msg) {
       $('loading').style.display = 'none';
-      $('reset-form').style.display = 'none';
       $('error-state').style.display = 'block';
       $('subtitle').textContent = '';
-      if (msg) $('error-state').querySelector('p').textContent = msg;
-    }
-
-    function showSuccess(title, detail) {
-      $('loading').style.display = 'none';
-      $('reset-form').style.display = 'none';
-      $('success-state').style.display = 'block';
-      $('subtitle').textContent = '';
-      $('success-title').textContent = title;
-      $('success-detail').textContent = detail;
-    }
-
-    // Password strength indicator
-    function checkStrength(pw) {
-      var bar = $('pw-strength');
-      if (!pw) { bar.style.width = '0'; return; }
-      var score = 0;
-      if (pw.length >= 6) score++;
-      if (pw.length >= 10) score++;
-      if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score++;
-      if (/[0-9]/.test(pw)) score++;
-      if (/[^A-Za-z0-9]/.test(pw)) score++;
-      var colors = ['#ff4444', '#ff8800', '#ffcc00', '#88cc00', '#22c55e'];
-      var widths = ['20%', '40%', '60%', '80%', '100%'];
-      bar.style.width = widths[Math.min(score, 4)];
-      bar.style.background = colors[Math.min(score, 4)];
+      if (msg) $('error-msg').textContent = msg;
     }
 
     if (mode === 'resetPassword' && oobCode) {
-      $('subtitle').textContent = 'Reset your password';
+      $('subtitle').textContent = 'Opening GhostLog...';
 
-      // Verify the code first
+      // Verify the code is still valid first
       auth.verifyPasswordResetCode(oobCode).then(function(email) {
-        $('loading').style.display = 'none';
-        $('reset-form').style.display = 'block';
-        $('reset-email-display').textContent = 'For ' + email;
+        var deepLink = 'com.ghostlog.app://reset-password?oobCode=' + encodeURIComponent(oobCode);
 
-        var pwInput = $('new-password');
-        var confirmInput = $('confirm-password');
-        var resetBtn = $('reset-btn');
-        var resetError = $('reset-error');
+        // Try to deep link immediately
+        try { window.location.href = deepLink; } catch (_) {}
 
-        pwInput.addEventListener('input', function() {
-          checkStrength(pwInput.value);
-          resetBtn.disabled = pwInput.value.length < 6 || pwInput.value !== confirmInput.value;
-          resetError.textContent = '';
-        });
+        // Also try iframe method
+        setTimeout(function() {
+          try {
+            var iframe = document.createElement('iframe');
+            iframe.style.cssText = 'width:0;height:0;border:0;position:absolute;top:-9999px';
+            iframe.src = deepLink;
+            document.body.appendChild(iframe);
+            setTimeout(function() { try { document.body.removeChild(iframe); } catch(_) {} }, 3000);
+          } catch (_) {}
+        }, 500);
 
-        confirmInput.addEventListener('input', function() {
-          resetBtn.disabled = pwInput.value.length < 6 || pwInput.value !== confirmInput.value;
-          if (confirmInput.value && pwInput.value !== confirmInput.value) {
-            resetError.textContent = 'Passwords don\'t match';
-          } else {
-            resetError.textContent = '';
-          }
-        });
+        // Show manual button after 2s
+        setTimeout(function() {
+          $('loading').style.display = 'none';
+          $('open-app').style.display = 'block';
+          $('subtitle').textContent = '';
+          $('open-btn').href = deepLink;
+        }, 2000);
 
-        resetBtn.addEventListener('click', function() {
-          if (pwInput.value.length < 6) {
-            resetError.textContent = 'Password must be at least 6 characters';
-            return;
-          }
-          if (pwInput.value !== confirmInput.value) {
-            resetError.textContent = 'Passwords don\'t match';
-            return;
-          }
-          resetBtn.disabled = true;
-          resetBtn.textContent = 'Resetting...';
-
-          auth.confirmPasswordReset(oobCode, pwInput.value).then(function() {
-            showSuccess('Password Reset!', 'You can now sign in with your new password.');
-          }).catch(function(err) {
-            resetBtn.disabled = false;
-            resetBtn.textContent = 'Reset Password';
-            if (err.code === 'auth/weak-password') {
-              resetError.textContent = 'Password is too weak. Use at least 6 characters.';
-            } else if (err.code === 'auth/expired-action-code') {
-              showError('This reset link has expired. Please request a new one from GhostLog.');
-            } else {
-              resetError.textContent = 'Reset failed: ' + (err.message || 'Unknown error');
-            }
-          });
-        });
-
-        // Allow Enter key to submit
-        confirmInput.addEventListener('keydown', function(e) {
-          if (e.key === 'Enter' && !resetBtn.disabled) resetBtn.click();
-        });
-        pwInput.addEventListener('keydown', function(e) {
-          if (e.key === 'Enter') confirmInput.focus();
-        });
-
-      }).catch(function(err) {
+      }).catch(function() {
         showError('This reset link has expired or is invalid. Please request a new one from GhostLog.');
       });
 
     } else if (mode === 'verifyEmail' && oobCode) {
       $('subtitle').textContent = 'Verifying your email...';
-
       auth.applyActionCode(oobCode).then(function() {
-        showSuccess('Email Verified!', 'Your email has been verified. You can close this page.');
-      }).catch(function(err) {
+        $('loading').style.display = 'none';
+        $('verify-success').style.display = 'block';
+        $('subtitle').textContent = '';
+      }).catch(function() {
         showError('This verification link has expired or is invalid.');
       });
 
     } else if (mode === 'recoverEmail' && oobCode) {
       $('subtitle').textContent = 'Recovering your email...';
-
       auth.checkActionCode(oobCode).then(function(info) {
-        return auth.applyActionCode(oobCode).then(function() {
-          showSuccess('Email Recovered!', 'Your email has been restored to ' + (info.data.email || 'your previous address') + '.');
-        });
-      }).catch(function(err) {
+        return auth.applyActionCode(oobCode);
+      }).then(function() {
+        $('loading').style.display = 'none';
+        $('verify-success').style.display = 'block';
+        $('verify-success').querySelector('h2').textContent = 'Email Recovered!';
+        $('verify-success').querySelector('p').textContent = 'Your email has been restored. You can close this page.';
+        $('subtitle').textContent = '';
+      }).catch(function() {
         showError('This recovery link has expired or is invalid.');
       });
 
     } else {
-      // No valid mode — redirect to app
       showError('Invalid link. Open GhostLog to sign in.');
     }
   </script>
