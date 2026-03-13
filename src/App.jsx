@@ -284,11 +284,12 @@ export default function App() {
         await signInWithPopup(auth, provider);
       }
     } catch (e) {
+      console.error('Google sign-in error:', e?.code, e?.message, e);
       const msg = e?.message || '';
       const code = e?.code || e || '';
       // Don't show error for user cancellation
       if (e?.code !== 'auth/popup-closed-by-user' && !msg.includes('canceled') && !msg.includes('cancelled') && code !== 'CANCELLED') {
-        setAuthError('Google sign-in failed');
+        setAuthError(`Google sign-in failed: ${e?.code || e?.message || 'Unknown error'}`);
       }
       setAuthLoading(false);
     }
@@ -311,6 +312,7 @@ export default function App() {
       setAuthError(null);
       return true; // signal success to show confirmation
     } catch (e) {
+      console.error('Magic link error:', e?.code, e?.message, e);
       const code = e?.code || '';
       if (code === 'auth/operation-not-allowed') {
         setAuthError('Magic link sign-in is not enabled. Enable "Email link" in Firebase Console → Authentication → Sign-in method.');
@@ -319,7 +321,7 @@ export default function App() {
       } else if (code === 'auth/too-many-requests') {
         setAuthError('Too many attempts. Please wait a moment and try again.');
       } else {
-        setAuthError('Failed to send magic link: ' + (e?.message || ''));
+        setAuthError(`Failed to send magic link: ${e?.code || ''} ${e?.message || 'Unknown error'}`.trim());
       }
       return false;
     }
