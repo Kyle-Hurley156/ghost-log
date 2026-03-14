@@ -1,4 +1,4 @@
-name: Build & Upload Android App
+name: Build Android APK & AAB
 
 on:
   push:
@@ -10,11 +10,15 @@ jobs:
   build_android:
     runs-on: ubuntu-latest
 
+    env:
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+      HAS_PLAY_KEY: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON != '' }}
+
     steps:
       - name: Checkout Source
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Node 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -26,9 +30,7 @@ jobs:
           java-version: '17'
 
       - name: Install Dependencies
-        run: |
-          npm install --legacy-peer-deps
-          npm install @capacitor/android@^6.2.1 --legacy-peer-deps
+        run: npm install --legacy-peer-deps
 
       # --- SECRETS INJECTION ---
       - name: Create .env file
@@ -52,15 +54,17 @@ jobs:
         run: |
           cd android/app
           sed -i "s/versionCode 1/versionCode ${{ github.run_number }}/" build.gradle
-          sed -i "s/versionName \"1.0\"/versionName \"4.0.${{ github.run_number }}\"/" build.gradle
+          sed -i "s/versionName \"1.0\"/versionName \"1.0.${{ github.run_number }}\"/" build.gradle
 
+      # --- RELEASE SIGNING (if keystore secrets are configured) ---
       - name: Decode Keystore
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        if: env.HAS_KEYSTORE == 'true'
         run: |
-          echo -n "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/ghostlog.jks
+          echo -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/ghostlog.jks
 
-      - name: Build Release AAB
+      # --- BUILD: Signed Release APK ---
+      - name: Build Release APK (Signed)
+        if: env.HAS_KEYSTORE == 'true'
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -68,23 +72,64 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file=$PWD/app/ghostlog.jks \
+            -Pandroid.injected.signing.store.password="$ANDROID_KEYSTORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias="$ANDROID_KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$ANDROID_KEY_PASSWORD"
+
+      # --- BUILD: Signed Release AAB (for Play Store) ---
+      - name: Build Release AAB (Signed)
+        if: env.HAS_KEYSTORE == 'true'
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          cd android
           ./gradlew bundleRelease \
             -Pandroid.injected.signing.store.file=$PWD/app/ghostlog.jks \
             -Pandroid.injected.signing.store.password="$ANDROID_KEYSTORE_PASSWORD" \
             -Pandroid.injected.signing.key.alias="$ANDROID_KEY_ALIAS" \
             -Pandroid.injected.signing.key.password="$ANDROID_KEY_PASSWORD"
 
-      - name: Upload AAB Artifact
+      # --- FALLBACK: Debug APK (no signing secrets needed) ---
+      - name: Build Debug APK (Unsigned Fallback)
+        if: env.HAS_KEYSTORE != 'true'
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      # --- UPLOAD ARTIFACTS ---
+      - name: Upload Release APK
+        if: env.HAS_KEYSTORE == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: ghostlog-release
-          path: android/app/build/outputs/bundle/release/app-release.aab
+          name: ghostlog-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 90
 
+      - name: Upload Release AAB
+        if: env.HAS_KEYSTORE == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ghostlog-release-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 90
+
+      - name: Upload Debug APK
+        if: env.HAS_KEYSTORE != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ghostlog-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 90
+
+      # --- OPTIONAL: Upload to Google Play Internal Testing ---
       - name: Upload to Google Play (Internal Testing)
-        if: env.GOOGLE_PLAY_JSON != ''
+        if: env.HAS_PLAY_KEY == 'true' && env.HAS_KEYSTORE == 'true'
         uses: r0adkll/upload-google-play@v1
-        env:
-          GOOGLE_PLAY_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.ghostlog.app
