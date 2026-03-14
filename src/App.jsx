@@ -8,7 +8,7 @@ import { Capacitor } from '@capacitor/core';
 import { Purchases } from '@revenuecat/purchases-capacitor';
 
 import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, browserLocalPersistence, setPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithCredential, signInWithPopup, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, sendPasswordResetEmail, verifyPasswordResetCode, confirmPasswordReset } from 'firebase/auth';
+import { getAuth, browserLocalPersistence, indexedDBLocalPersistence, setPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithCredential, signInWithPopup, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, sendPasswordResetEmail, verifyPasswordResetCode, confirmPasswordReset } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
 
 import { FIREBASE_CONFIG, INITIAL_SPLITS, INITIAL_TARGETS } from './constants';
@@ -31,6 +31,8 @@ import { DailyCheckinModal } from './components/DailyCheckinModal';
 import { TrainTab } from './components/TrainTab';
 import { EatTab } from './components/EatTab';
 import { StatsTab } from './components/StatsTab';
+
+import { DebugOverlay, debugLog } from './components/DebugOverlay';
 
 // --- FALLBACKS FOR WEB PREVIEW ---
 const CapacitorFallback = typeof Capacitor !== 'undefined' ? Capacitor : {
@@ -149,6 +151,8 @@ export default function App() {
   // --- INITIALIZATION (FIREBASE & REVENUECAT) ---
   // Store unsubscribe ref so useEffect cleanup can access it outside the async IIFE
   const authUnsubscribeRef = useRef(null);
+  // Track whether onAuthStateChanged has resolved at least once (prevents deep link interference)
+  const authResolvedRef = useRef(false);
 
   useEffect(() => {
     const setupRevenueCat = async (firebaseUid) => {
@@ -169,31 +173,49 @@ export default function App() {
       }
     };
 
-    // Safety net: if auth hasn't resolved in 4s, stop waiting
+    // Safety net: if auth hasn't resolved in 8s, stop waiting
+    // (WKWebView can be slow to restore sessions — 4s was too aggressive)
     const authTimeout = setTimeout(() => {
       console.warn('[GhostLog] Auth timeout — forcing authLoading=false');
+      debugLog('AUTH TIMEOUT after 8s');
       setAuthPhase('timeout');
       setAuthLoading(false);
-    }, 4000);
+    }, 8000);
 
     if (FIREBASE_CONFIG.apiKey) {
       (async () => {
         try {
+          debugLog('Firebase init starting');
           console.log('[GhostLog] Firebase init starting');
           setAuthPhase('firebase-init');
           const app = getApps().length ? getApps()[0] : initializeApp(FIREBASE_CONFIG);
           const auth = getAuth(app);
-          // Use localStorage instead of indexedDB — indexedDB hangs in WKWebView
+          // Try indexedDB first (works well on iOS 15+ WKWebView), fall back to localStorage
+          debugLog('Setting persistence...');
           console.log('[GhostLog] Setting persistence...');
           setAuthPhase('persistence');
           try {
             await Promise.race([
-              setPersistence(auth, browserLocalPersistence),
-              new Promise((_, reject) => setTimeout(() => reject(new Error('persistence timeout')), 3000))
+              (async () => {
+                try {
+                  // indexedDB works reliably on modern iOS (15+) and is Firebase's preferred method
+                  await setPersistence(auth, indexedDBLocalPersistence);
+                  debugLog('Persistence: indexedDB OK');
+                  console.log('[GhostLog] Persistence set OK (indexedDB)');
+                } catch (idbErr) {
+                  // Fall back to localStorage if indexedDB fails
+                  debugLog('indexedDB failed, trying localStorage: ' + idbErr?.message);
+                  console.warn('[GhostLog] indexedDB persistence failed, trying localStorage:', idbErr?.message);
+                  await setPersistence(auth, browserLocalPersistence);
+                  debugLog('Persistence: localStorage OK');
+                  console.log('[GhostLog] Persistence set OK (localStorage)');
+                }
+              })(),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('persistence timeout')), 5000))
             ]);
-            console.log('[GhostLog] Persistence set OK');
           } catch (persistErr) {
             // Don't let persistence failure or timeout block auth — continue with default
+            debugLog('Persistence failed/timeout: ' + persistErr?.message);
             console.warn('[GhostLog] setPersistence failed/timeout, continuing:', persistErr?.message);
           }
 
@@ -219,11 +241,14 @@ export default function App() {
           }
 
           setAuthPhase('auth-listener');
+          debugLog('Registering onAuthStateChanged...');
           console.log('[GhostLog] Registering onAuthStateChanged...');
           const unsubscribe = onAuthStateChanged(auth, async (user) => {
             clearTimeout(authTimeout);
+            debugLog('onAuthStateChanged: ' + (user ? user.email : 'null'));
             console.log('[GhostLog] onAuthStateChanged fired, user:', !!user, user?.email);
             if (user) {
+              authResolvedRef.current = true;
               setCloudUser(user);
               setCloudStatus('synced');
               setAuthPhase('authenticated');
@@ -243,6 +268,7 @@ export default function App() {
           authUnsubscribeRef.current = unsubscribe;
         } catch (e) {
           console.error("Firebase Init Failed", e);
+          debugLog('Firebase init FAILED: ' + e?.message);
           clearTimeout(authTimeout);
           setAuthLoading(false);
         }
@@ -304,6 +330,7 @@ export default function App() {
 
   const handleGoogleSignIn = async () => {
     console.log('[GhostLog] handleGoogleSignIn called');
+    debugLog('handleGoogleSignIn called');
     setAuthLoading(true);
     setAuthPhase('google-auth');
     setAuthError(null);
@@ -491,8 +518,10 @@ export default function App() {
         try {
           const { Browser } = await import('@capacitor/browser');
           browserCleanup = await Browser.addListener('browserFinished', () => {
+            debugLog('browserFinished event');
             setTimeout(() => {
               if (!googleAuthPending.current) return;
+              debugLog('browserFinished: resetting auth (pending was true)');
               googleAuthPending.current = false;
               setAuthLoading(false);
             }, 1500);
@@ -501,9 +530,23 @@ export default function App() {
 
         deepLinkCleanup = await CapApp.addListener('appUrlOpen', async ({ url }) => {
           console.log('Deep link received:', url);
+          debugLog('Deep link: ' + url);
 
           // Handle Google auth deep link (legacy/Android fallback)
           if (url.includes('google-auth')) {
+            // Guard: if auth already resolved with a user, this is a stale deep link replay.
+            // iOS can replay the last URL-scheme launch on cold start — ignore it.
+            if (authResolvedRef.current) {
+              debugLog('Ignoring stale google-auth deep link (auth already resolved)');
+              console.log('[GhostLog] Ignoring stale google-auth deep link — user already authenticated');
+              return;
+            }
+            // Guard: only process if we actively initiated Google auth (googleAuthPending flag)
+            if (!googleAuthPending.current) {
+              debugLog('Ignoring google-auth deep link (not pending)');
+              console.log('[GhostLog] Ignoring google-auth deep link — not initiated by user');
+              return;
+            }
             googleAuthPending.current = false;
             try {
               const qs = url.split('?')[1] || '';
@@ -511,14 +554,17 @@ export default function App() {
               const idToken = params.get('idToken') || null;
               const accessToken = params.get('accessToken') || null;
               console.log('Google tokens received — idToken:', !!idToken, 'accessToken:', !!accessToken);
+              debugLog('Google tokens: id=' + !!idToken + ' access=' + !!accessToken);
               if (idToken || accessToken) {
                 const auth = getAuth();
                 const credential = GoogleAuthProvider.credential(idToken, accessToken);
                 const result = await signInWithCredential(auth, credential);
                 console.log('signInWithCredential success');
+                debugLog('signInWithCredential OK');
                 if (result?.user) {
                   setCloudUser(result.user);
                   setCloudStatus('synced');
+                  setAuthPhase('authenticated');
                   loadCloudData(result.user.uid);
                 }
               } else {
@@ -526,6 +572,7 @@ export default function App() {
               }
             } catch (e) {
               console.error('Google deep link auth failed', e);
+              debugLog('Google deep link FAILED: ' + e?.message);
               setAuthError('Google sign-in failed: ' + (e?.message || ''));
             }
             setAuthLoading(false);
@@ -769,6 +816,7 @@ export default function App() {
       <div className="bg-black min-h-screen flex flex-col items-center justify-center gap-4">
         <Loader2 size={32} className="animate-spin accent-text" />
         <AuthLoadingHelper authPhase={authPhase} onCancel={() => { setAuthLoading(false); setAuthPhase('cancelled'); }} />
+        <DebugOverlay authPhase={authPhase} cloudUser={cloudUser} authLoading={authLoading} authError={authError} />
       </div>
     );
   }
@@ -778,6 +826,7 @@ export default function App() {
     return (
       <ErrorBoundary>
         <AuthScreen onAuth={handleAuth} onGoogle={handleGoogleSignIn} onMagicLink={handleMagicLink} onForgotPassword={handleForgotPassword} onResetConfirm={handleResetConfirm} pendingReset={pendingPasswordReset} onCancelReset={() => setPendingPasswordReset(null)} loading={authLoading} error={authError} />
+        <DebugOverlay authPhase={authPhase} cloudUser={cloudUser} authLoading={authLoading} authError={authError} />
       </ErrorBoundary>
     );
   }
