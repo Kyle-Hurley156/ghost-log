@@ -187,11 +187,14 @@ export default function App() {
           console.log('[GhostLog] Setting persistence...');
           setAuthPhase('persistence');
           try {
-            await setPersistence(auth, browserLocalPersistence);
+            await Promise.race([
+              setPersistence(auth, browserLocalPersistence),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('persistence timeout')), 3000))
+            ]);
             console.log('[GhostLog] Persistence set OK');
           } catch (persistErr) {
-            // Don't let persistence failure block auth entirely — continue with default
-            console.warn('[GhostLog] setPersistence failed, continuing with default:', persistErr?.message);
+            // Don't let persistence failure or timeout block auth — continue with default
+            console.warn('[GhostLog] setPersistence failed/timeout, continuing:', persistErr?.message);
           }
 
           // Handle magic link sign-in (must run after Firebase init)
