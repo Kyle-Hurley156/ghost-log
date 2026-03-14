@@ -55,6 +55,27 @@ const GhostLogo = ({ size = 28 }) => (
   </svg>
 );
 
+// Shows diagnostic text + cancel button if auth loading takes too long
+function AuthLoadingHelper({ authPhase, onCancel }) {
+  const [elapsed, setElapsed] = React.useState(0);
+  React.useEffect(() => {
+    const t = setInterval(() => setElapsed(s => s + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <>
+      {elapsed >= 3 && (
+        <p className="text-gray-700 text-[10px] text-center">{authPhase} ({elapsed}s)</p>
+      )}
+      {elapsed >= 5 && (
+        <button onClick={onCancel} className="text-gray-500 text-xs hover:text-white transition-colors px-4 py-2">
+          Taking too long? Tap to skip
+        </button>
+      )}
+    </>
+  );
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('train');
   const [phase, setPhase] = useStickyState('CUT', 'ghost_phase');
@@ -79,6 +100,7 @@ export default function App() {
   const [cloudStatus, setCloudStatus] = useState('disconnected');
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
+  const [authPhase, setAuthPhase] = useState('init'); // Tracks what auth is doing for diagnostics
   const [dataLoaded, setDataLoaded] = useState(false);
   const [pendingPasswordReset, setPendingPasswordReset] = useState(null); // { oobCode, email }
 
@@ -147,21 +169,30 @@ export default function App() {
       }
     };
 
-    // Safety net: if auth hasn't resolved in 5s, stop waiting
+    // Safety net: if auth hasn't resolved in 4s, stop waiting
     const authTimeout = setTimeout(() => {
-      setAuthLoading(prev => {
-        if (prev) console.warn("Auth timeout — forcing load");
-        return false;
-      });
-    }, 5000);
+      console.warn('[GhostLog] Auth timeout — forcing authLoading=false');
+      setAuthPhase('timeout');
+      setAuthLoading(false);
+    }, 4000);
 
     if (FIREBASE_CONFIG.apiKey) {
       (async () => {
         try {
+          console.log('[GhostLog] Firebase init starting');
+          setAuthPhase('firebase-init');
           const app = getApps().length ? getApps()[0] : initializeApp(FIREBASE_CONFIG);
           const auth = getAuth(app);
           // Use localStorage instead of indexedDB — indexedDB hangs in WKWebView
-          await setPersistence(auth, browserLocalPersistence);
+          console.log('[GhostLog] Setting persistence...');
+          setAuthPhase('persistence');
+          try {
+            await setPersistence(auth, browserLocalPersistence);
+            console.log('[GhostLog] Persistence set OK');
+          } catch (persistErr) {
+            // Don't let persistence failure block auth entirely — continue with default
+            console.warn('[GhostLog] setPersistence failed, continuing with default:', persistErr?.message);
+          }
 
           // Handle magic link sign-in (must run after Firebase init)
           if (isSignInWithEmailLink(auth, window.location.href)) {
@@ -184,11 +215,15 @@ export default function App() {
             }
           }
 
+          setAuthPhase('auth-listener');
+          console.log('[GhostLog] Registering onAuthStateChanged...');
           const unsubscribe = onAuthStateChanged(auth, async (user) => {
             clearTimeout(authTimeout);
+            console.log('[GhostLog] onAuthStateChanged fired, user:', !!user, user?.email);
             if (user) {
               setCloudUser(user);
               setCloudStatus('synced');
+              setAuthPhase('authenticated');
               setAuthLoading(false); // Show app immediately — don't wait for data
               loadCloudData(user.uid); // Load data async in background
               setupRevenueCat(user.uid);
@@ -197,6 +232,7 @@ export default function App() {
               setCloudStatus('disconnected');
               setIsPro(false);
               setDataLoaded(false);
+              setAuthPhase('no-user');
               setAuthLoading(false);
             }
           });
@@ -221,8 +257,16 @@ export default function App() {
 
   // --- AUTH HANDLERS ---
   const handleAuth = async (email, password, isSignUp) => {
+    console.log('[GhostLog] handleAuth called, isSignUp:', isSignUp);
     setAuthLoading(true);
+    setAuthPhase(isSignUp ? 'signing-up' : 'signing-in');
     setAuthError(null);
+    // Safety: force stop loading after 10s no matter what
+    const safetyTimer = setTimeout(() => {
+      console.warn('[GhostLog] handleAuth safety timeout hit');
+      setAuthLoading(false);
+      setAuthPhase('auth-timeout');
+    }, 10000);
     try {
       const auth = getAuth();
       let result;
@@ -231,27 +275,41 @@ export default function App() {
       } else {
         result = await signInWithEmailAndPassword(auth, email, password);
       }
+      clearTimeout(safetyTimer);
+      console.log('[GhostLog] Auth success, user:', result?.user?.email);
       // Immediately set user — don't rely solely on onAuthStateChanged (can be delayed on iOS)
       if (result?.user) {
         setCloudUser(result.user);
         setCloudStatus('synced');
+        setAuthPhase('authenticated');
         loadCloudData(result.user.uid);
       }
       setAuthLoading(false);
     } catch (e) {
+      clearTimeout(safetyTimer);
+      console.error('[GhostLog] Auth error:', e?.code, e?.message);
       const code = e?.code || '';
       if (code === 'auth/email-already-in-use') setAuthError('Email already in use');
       else if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') setAuthError('Invalid email or password');
       else if (code === 'auth/weak-password') setAuthError('Password must be at least 6 characters');
       else if (code === 'auth/invalid-email') setAuthError('Invalid email address');
       else setAuthError(e.message);
+      setAuthPhase('error');
       setAuthLoading(false);
     }
   };
 
   const handleGoogleSignIn = async () => {
+    console.log('[GhostLog] handleGoogleSignIn called');
     setAuthLoading(true);
+    setAuthPhase('google-auth');
     setAuthError(null);
+    // Safety: force stop loading after 15s (Google auth can be slow)
+    const safetyTimer = setTimeout(() => {
+      console.warn('[GhostLog] Google auth safety timeout hit');
+      setAuthLoading(false);
+      setAuthPhase('google-timeout');
+    }, 15000);
     try {
       const platform = CapacitorFallback.getPlatform();
       if (platform === 'ios') {
@@ -277,12 +335,16 @@ export default function App() {
             const auth = getAuth();
             const credential = GoogleAuthProvider.credential(idToken, accessToken);
             const result = await signInWithCredential(auth, credential);
+            clearTimeout(safetyTimer);
+            console.log('[GhostLog] Google signInWithCredential success');
             if (result?.user) {
               setCloudUser(result.user);
               setCloudStatus('synced');
+              setAuthPhase('authenticated');
               loadCloudData(result.user.uid);
             }
           } else {
+            clearTimeout(safetyTimer);
             setAuthError('No token received from Google sign-in');
           }
           setAuthLoading(false);
@@ -310,20 +372,24 @@ export default function App() {
         const provider = new GoogleAuthProvider();
         const result = await signInWithPopup(auth, provider);
         if (result?.user) {
+          clearTimeout(safetyTimer);
           setCloudUser(result.user);
           setCloudStatus('synced');
+          setAuthPhase('authenticated');
           setAuthLoading(false);
           loadCloudData(result.user.uid);
         }
       }
     } catch (e) {
-      console.error('Google sign-in error:', e?.code, e?.message, e);
+      clearTimeout(safetyTimer);
+      console.error('[GhostLog] Google sign-in error:', e?.code, e?.message, e);
       const msg = e?.message || '';
       const code = e?.code || e || '';
       // Don't show error for user cancellation
       if (e?.code !== 'auth/popup-closed-by-user' && !msg.includes('canceled') && !msg.includes('cancelled') && code !== 'CANCELLED') {
         setAuthError(`Google sign-in failed: ${e?.code || e?.message || 'Unknown error'}`);
       }
+      setAuthPhase('error');
       setAuthLoading(false);
     }
   };
@@ -697,8 +763,9 @@ export default function App() {
   // Show loading only while checking INITIAL auth state (before we know if user is logged in)
   if (authLoading && !cloudUser) {
     return (
-      <div className="bg-black min-h-screen flex items-center justify-center">
+      <div className="bg-black min-h-screen flex flex-col items-center justify-center gap-4">
         <Loader2 size={32} className="animate-spin accent-text" />
+        <AuthLoadingHelper authPhase={authPhase} onCancel={() => { setAuthLoading(false); setAuthPhase('cancelled'); }} />
       </div>
     );
   }
