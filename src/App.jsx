@@ -382,7 +382,7 @@ export default function App() {
           // WebAuth plugin not available (e.g. older TestFlight build) — fall back to Browser
           if (String(pluginErr).includes('UNIMPLEMENTED') || String(pluginErr).includes('not implemented')) {
             console.warn('WebAuth plugin not available, falling back to Browser plugin');
-            googleAuthPending.current = true;
+            googleAuthStartedAt.current = Date.now();
             const { Browser } = await import('@capacitor/browser');
             await Browser.open({ url: 'https://ghost-log.vercel.app/auth-redirect.html' });
             // Auth completion handled by appUrlOpen listener (may not work on older iOS builds)
@@ -392,7 +392,7 @@ export default function App() {
         }
       } else if (platform === 'android') {
         // Android: deep links work fine with @capacitor/browser + SFSafariViewController
-        googleAuthPending.current = true;
+        googleAuthStartedAt.current = Date.now();
         const { Browser } = await import('@capacitor/browser');
         await Browser.open({ url: 'https://ghost-log.vercel.app/auth-redirect.html' });
         // Auth completion is handled by the appUrlOpen listener
@@ -505,7 +505,9 @@ export default function App() {
   // Magic link completion is handled inside Firebase init useEffect above
 
   // Listen for deep links (Google auth fallback + magic link from Safari redirect)
-  const googleAuthPending = useRef(false);
+  // Timestamp-based tracking: records WHEN Google auth was initiated.
+  // Deep links are accepted within 120s of initiation, regardless of browser/timeout events.
+  const googleAuthStartedAt = useRef(0);
   useEffect(() => {
     if (!CapacitorFallback.isNativePlatform()) return;
     let deepLinkCleanup, browserCleanup;
@@ -519,12 +521,13 @@ export default function App() {
           const { Browser } = await import('@capacitor/browser');
           browserCleanup = await Browser.addListener('browserFinished', () => {
             debugLog('browserFinished event');
+            // Give deep link 5s to arrive after browser closes (iOS can be slow)
             setTimeout(() => {
-              if (!googleAuthPending.current) return;
-              debugLog('browserFinished: resetting auth (pending was true)');
-              googleAuthPending.current = false;
+              if (!googleAuthStartedAt.current) return; // Already handled by deep link
+              debugLog('browserFinished: resetting auth (deep link never arrived)');
+              googleAuthStartedAt.current = 0;
               setAuthLoading(false);
-            }, 1500);
+            }, 5000);
           });
         } catch (_) {}
 
@@ -534,20 +537,18 @@ export default function App() {
 
           // Handle Google auth deep link (legacy/Android fallback)
           if (url.includes('google-auth')) {
-            // Guard: if auth already resolved with a user, this is a stale deep link replay.
-            // iOS can replay the last URL-scheme launch on cold start — ignore it.
-            if (authResolvedRef.current) {
-              debugLog('Ignoring stale google-auth deep link (auth already resolved)');
-              console.log('[GhostLog] Ignoring stale google-auth deep link — user already authenticated');
+            // Timestamp-based guard: only accept deep links from a Google auth we initiated
+            // within the last 120 seconds. This replaces the old boolean flag approach which
+            // was too fragile — browserFinished events and auth timeouts would reset the flag
+            // before iOS delivered the deep link.
+            const elapsed = Date.now() - googleAuthStartedAt.current;
+            if (!googleAuthStartedAt.current || elapsed > 120000) {
+              debugLog('Ignoring google-auth deep link (no active auth or too old, elapsed=' + elapsed + 'ms)');
+              console.log('[GhostLog] Ignoring google-auth deep link — no recent auth initiated (elapsed=' + elapsed + 'ms)');
               return;
             }
-            // Guard: only process if we actively initiated Google auth (googleAuthPending flag)
-            if (!googleAuthPending.current) {
-              debugLog('Ignoring google-auth deep link (not pending)');
-              console.log('[GhostLog] Ignoring google-auth deep link — not initiated by user');
-              return;
-            }
-            googleAuthPending.current = false;
+            googleAuthStartedAt.current = 0; // Consume — prevents replay of same deep link
+            setAuthLoading(true); // Show spinner while processing (may have been cleared by timeout)
             try {
               const qs = url.split('?')[1] || '';
               const params = new URLSearchParams(qs);
