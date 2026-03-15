@@ -557,20 +557,83 @@ export default function App() {
               console.log('Google tokens received — idToken:', !!idToken, 'accessToken:', !!accessToken);
               debugLog('Google tokens: id=' + !!idToken + ' access=' + !!accessToken);
               if (idToken || accessToken) {
-                debugLog('Calling signInWithCredential (idToken length=' + (idToken?.length || 0) + ')');
+                debugLog('Exchanging Google token via REST API (idToken length=' + (idToken?.length || 0) + ')');
+                // Step 1: Exchange Google token for Firebase session via REST API.
+                // signInWithCredential hangs indefinitely in WKWebView, so we bypass it entirely.
+                const apiKey = FIREBASE_CONFIG.apiKey;
+                const restRes = await fetch(
+                  `https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=${apiKey}`,
+                  {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      postBody: `id_token=${idToken}&providerId=google.com`,
+                      requestUri: 'https://ghost-log.vercel.app',
+                      returnSecureToken: true,
+                      returnIdpCredential: true
+                    })
+                  }
+                );
+                const restData = await restRes.json();
+                if (restData.error) {
+                  throw new Error(`Firebase REST: ${restData.error.message}`);
+                }
+                debugLog('REST API OK: ' + restData.email);
+                console.log('[GhostLog] REST API sign-in success:', restData.email);
+
+                // Step 2: Try signInWithCredential with BOTH tokens from REST (5s timeout).
+                // The REST response includes oauthAccessToken which the original flow lacked.
                 const auth = getAuth();
-                const credential = GoogleAuthProvider.credential(idToken, accessToken);
-                const result = await Promise.race([
-                  signInWithCredential(auth, credential),
-                  new Promise((_, reject) => setTimeout(() => reject(new Error('signInWithCredential hung for 10s')), 10000))
-                ]);
-                console.log('signInWithCredential success');
-                debugLog('signInWithCredential OK: ' + result?.user?.email);
-                if (result?.user) {
-                  setCloudUser(result.user);
-                  setCloudStatus('synced');
-                  setAuthPhase('authenticated');
-                  loadCloudData(result.user.uid);
+                try {
+                  const credential = GoogleAuthProvider.credential(
+                    restData.oauthIdToken || idToken,
+                    restData.oauthAccessToken || null
+                  );
+                  const result = await Promise.race([
+                    signInWithCredential(auth, credential),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('SDK hung')), 5000))
+                  ]);
+                  debugLog('signInWithCredential OK: ' + result?.user?.email);
+                  if (result?.user) {
+                    setCloudUser(result.user);
+                    setCloudStatus('synced');
+                    setAuthPhase('authenticated');
+                    loadCloudData(result.user.uid);
+                  }
+                } catch (sdkErr) {
+                  // Step 3: SDK still hung — inject session into localStorage and reload.
+                  // The REST API already authenticated the user server-side.
+                  debugLog('SDK failed (' + sdkErr.message + '), injecting session + reload');
+                  console.warn('[GhostLog] signInWithCredential failed, using REST fallback:', sdkErr.message);
+                  const storageKey = `firebase:authUser:${apiKey}:[DEFAULT]`;
+                  localStorage.setItem(storageKey, JSON.stringify({
+                    uid: restData.localId,
+                    email: restData.email,
+                    emailVerified: restData.emailVerified || false,
+                    displayName: restData.displayName || restData.fullName || '',
+                    isAnonymous: false,
+                    photoURL: restData.photoUrl || '',
+                    providerData: [{
+                      providerId: 'google.com',
+                      uid: restData.rawId || restData.localId,
+                      displayName: restData.displayName || restData.fullName || '',
+                      email: restData.email,
+                      phoneNumber: null,
+                      photoURL: restData.photoUrl || ''
+                    }],
+                    stsTokenManager: {
+                      refreshToken: restData.refreshToken,
+                      accessToken: restData.idToken,
+                      expirationTime: Date.now() + 3600 * 1000
+                    },
+                    createdAt: String(Date.now()),
+                    lastLoginAt: String(Date.now()),
+                    apiKey: apiKey,
+                    appName: '[DEFAULT]'
+                  }));
+                  // Reload so Firebase SDK hydrates the session from localStorage
+                  window.location.reload();
+                  return;
                 }
               } else {
                 debugLog('No tokens in deep link URL');
