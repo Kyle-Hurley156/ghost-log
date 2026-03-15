@@ -50,10 +50,27 @@
     <div class="fallback-link" id="fallback-link">Having trouble? Tap here to try redirect sign-in</div>
   </div>
 
+  <!-- Firebase SDK (compat for simple usage on this page) -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <!-- Google Identity Services -->
   <script src="https://accounts.google.com/gsi/client" async></script>
+
   <script>
     var CLIENT_ID = '585835627677-loisfssj35vf55r5repl928752rr1ko2.apps.googleusercontent.com';
+    var FIREBASE_CONFIG = {
+      apiKey: "AIzaSyAH3L6UcFaXos3AT3o8W8EHsgWBbL8_ZA4",
+      authDomain: "ghost-log.vercel.app",
+      projectId: "ghost-log",
+      storageBucket: "ghost-log.firebasestorage.app",
+      messagingSenderId: "585835627677",
+      appId: "1:585835627677:web:9a7a15f79c21a5cb7b0074"
+    };
     var deepLinkUrl = '';
+
+    // Initialize Firebase on this web page (where signInWithCredential WORKS)
+    if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    var auth = firebase.auth();
 
     function $(id) { return document.getElementById(id); }
 
@@ -103,10 +120,42 @@
       }, 2000);
     }
 
-    // GIS callback — receives Google ID token directly
+    // Sign in with Google token using Firebase SDK ON THIS WEB PAGE (where it works),
+    // then serialize the full session and pass it back to the app via deep link.
+    function firebaseSignInAndReturn(googleIdToken) {
+      $('spinner').style.display = 'block';
+      $('status').textContent = 'Signing in...';
+      $('g-signin-btn').style.display = 'none';
+      $('fallback-link').style.display = 'none';
+
+      var credential = firebase.auth.GoogleAuthProvider.credential(googleIdToken);
+      auth.signInWithCredential(credential)
+        .then(function(result) {
+          if (result && result.user) {
+            // Serialize the Firebase user session — this is the EXACT format
+            // that Firebase SDK expects when reading from localStorage
+            var userJson = result.user.toJSON();
+            var encoded = encodeURIComponent(JSON.stringify(userJson));
+            deepLinkBack('com.ghostlog.app://google-auth-session?user=' + encoded);
+          } else {
+            $('error').textContent = 'Sign-in succeeded but no user returned.';
+            $('spinner').style.display = 'none';
+          }
+        })
+        .catch(function(err) {
+          console.error('Firebase signInWithCredential failed:', err);
+          $('error').textContent = 'Sign-in failed: ' + (err.code || err.message || 'Unknown error');
+          $('spinner').style.display = 'none';
+          $('g-signin-btn').style.display = 'flex';
+          $('fallback-link').style.display = 'block';
+          $('status').textContent = 'Tap to sign in with Google';
+        });
+    }
+
+    // GIS callback — receives Google ID token, signs in via Firebase on this page
     function handleCredentialResponse(response) {
       if (response && response.credential) {
-        deepLinkBack('com.ghostlog.app://google-auth?idToken=' + encodeURIComponent(response.credential));
+        firebaseSignInAndReturn(response.credential);
       } else {
         $('error').textContent = 'No credential received from Google. Try again.';
       }
@@ -140,7 +189,7 @@
         var idToken = params.get('id_token');
         if (idToken) {
           history.replaceState(null, '', window.location.pathname);
-          deepLinkBack('com.ghostlog.app://google-auth?idToken=' + encodeURIComponent(idToken));
+          firebaseSignInAndReturn(idToken);
           return;
         }
       }
