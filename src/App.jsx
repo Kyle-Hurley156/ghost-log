@@ -47,6 +47,65 @@ const PurchasesFallback = typeof Purchases !== 'undefined' ? Purchases : {
   purchasePackage: async () => ({ customerInfo: { entitlements: { active: {} } } })
 };
 
+// --- FIREBASE REST API GOOGLE SIGN-IN ---
+// Bypasses signInWithCredential which hangs indefinitely in WKWebView.
+// Uses plain fetch() to call the same Firebase endpoint directly.
+async function firebaseRestGoogleSignIn(googleIdToken) {
+  const apiKey = FIREBASE_CONFIG.apiKey;
+  const response = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        postBody: `id_token=${googleIdToken}&providerId=google.com`,
+        requestUri: 'https://ghost-log.vercel.app',
+        returnIdpCredential: true,
+        returnSecureToken: true,
+      }),
+    }
+  );
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData?.error?.message || `Firebase REST sign-in failed (${response.status})`);
+  }
+  return response.json();
+}
+
+// Inject Firebase user session into localStorage so Firebase picks it up on reload.
+// Format matches Firebase SDK's UserImpl.toJSON() exactly.
+function injectFirebaseSession(restResponse) {
+  const apiKey = FIREBASE_CONFIG.apiKey;
+  const key = `firebase:authUser:${apiKey}:[DEFAULT]`;
+  const userObj = {
+    uid: restResponse.localId,
+    email: restResponse.email || '',
+    emailVerified: restResponse.emailVerified || false,
+    displayName: restResponse.displayName || restResponse.fullName || '',
+    isAnonymous: false,
+    photoURL: restResponse.photoUrl || '',
+    providerData: [{
+      providerId: 'google.com',
+      uid: restResponse.localId,
+      displayName: restResponse.displayName || '',
+      email: restResponse.email || '',
+      phoneNumber: null,
+      photoURL: restResponse.photoUrl || '',
+    }],
+    stsTokenManager: {
+      refreshToken: restResponse.refreshToken,
+      accessToken: restResponse.idToken,
+      expirationTime: Date.now() + (parseInt(restResponse.expiresIn || '3600') * 1000),
+    },
+    createdAt: String(Date.now()),
+    lastLoginAt: String(Date.now()),
+    apiKey: apiKey,
+    appName: '[DEFAULT]',
+  };
+  localStorage.setItem(key, JSON.stringify(userObj));
+  return userObj;
+}
+
 // Ghost Logo SVG component matching the brand
 const GhostLogo = ({ size = 28 }) => (
   <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -348,30 +407,24 @@ export default function App() {
             url: 'https://ghost-log.vercel.app/auth-redirect.html',
             callbackScheme: 'com.ghostlog.app'
           });
-          // result.url = "com.ghostlog.app://google-auth?idToken=...&accessToken=..."
+          // result.url = "com.ghostlog.app://google-auth?idToken=<googleIdToken>"
           const callbackUrl = result.url || '';
           console.log('WebAuth callback:', callbackUrl);
+          debugLog('WebAuth callback URL: ' + callbackUrl.substring(0, 100) + '...');
           const qs = callbackUrl.split('?')[1] || '';
           const params = new URLSearchParams(qs);
           const idToken = params.get('idToken') || null;
-          const accessToken = params.get('accessToken') || null;
-          if (idToken || accessToken) {
-            const auth = getAuth();
-            const credential = GoogleAuthProvider.credential(idToken, accessToken);
-            const result = await Promise.race([
-              signInWithCredential(auth, credential),
-              new Promise((_, reject) => setTimeout(() => reject(new Error('signInWithCredential hung for 10s')), 10000))
-            ]);
+          if (idToken) {
             clearTimeout(googleSafetyTimerRef.current);
-            console.log('[GhostLog] Google signInWithCredential success');
-            if (result?.user) {
-              setCloudUser(result.user);
-              setCloudStatus('synced');
-              setAuthPhase('authenticated');
-              loadCloudData(result.user.uid);
-            }
+            debugLog('WebAuth: Got ID token, calling REST API (bypasses WKWebView hang)...');
+            const restResult = await firebaseRestGoogleSignIn(idToken);
+            injectFirebaseSession(restResult);
+            debugLog('Firebase session injected via REST API, reloading app...');
+            window.location.reload();
+            return;
           } else {
             clearTimeout(googleSafetyTimerRef.current);
+            debugLog('WebAuth: no idToken in callback URL');
             setAuthError('No token received from Google sign-in');
           }
           setAuthLoading(false);
@@ -533,56 +586,39 @@ export default function App() {
           console.log('Deep link received:', url);
           debugLog('Deep link: ' + url);
 
-          // Handle Google auth session deep link (new approach: Firebase sign-in
-          // happens on auth-redirect.html web page where it works, serialized session
-          // is passed back and injected into localStorage, then reload)
-          if (url.includes('google-auth-session')) {
+          // Handle Google auth deep link (Browser fallback path for Android / iOS without WebAuth)
+          // auth-redirect.html sends: com.ghostlog.app://google-auth?idToken=<googleIdToken>
+          // Uses REST API instead of signInWithCredential (which hangs in WKWebView).
+          if (url.includes('google-auth')) {
             const elapsed = Date.now() - googleAuthStartedAt.current;
             if (!googleAuthStartedAt.current || elapsed > 120000) {
-              debugLog('Ignoring google-auth-session (no active auth, elapsed=' + elapsed + 'ms)');
+              debugLog('Ignoring google-auth deep link (no active auth, elapsed=' + elapsed + 'ms)');
               return;
             }
             googleAuthStartedAt.current = 0;
             clearTimeout(googleSafetyTimerRef.current);
-            debugLog('Received Firebase session from web (elapsed=' + elapsed + 'ms)');
+            debugLog('Google auth deep link received (elapsed=' + elapsed + 'ms)');
             try {
               const qs = url.split('?')[1] || '';
               const params = new URLSearchParams(qs);
-              const userJson = params.get('user');
-              if (userJson) {
-                const userData = JSON.parse(decodeURIComponent(userJson));
-                debugLog('Session received for: ' + userData.email);
-                // Write the exact Firebase user.toJSON() to localStorage
-                const apiKey = FIREBASE_CONFIG.apiKey;
-                const storageKey = `firebase:authUser:${apiKey}:[DEFAULT]`;
-                localStorage.setItem(storageKey, JSON.stringify(userData));
-                // Reload — Firebase SDK reads localStorage and fires onAuthStateChanged
+              const idToken = params.get('idToken') || null;
+              if (idToken) {
+                debugLog('Got Google ID token, calling REST API (bypasses WKWebView hang)...');
+                const restResult = await firebaseRestGoogleSignIn(idToken);
+                injectFirebaseSession(restResult);
+                debugLog('Firebase session injected via REST API, reloading app...');
                 try { const { Browser } = await import('@capacitor/browser'); Browser.close(); } catch (_) {}
                 window.location.reload();
                 return;
               } else {
-                debugLog('No user data in session deep link');
-                setAuthError('Sign-in failed — no session data received');
+                debugLog('No idToken in google-auth deep link');
+                setAuthError('Sign-in failed — no token received');
               }
             } catch (e) {
-              console.error('Google session deep link failed', e);
-              debugLog('Session inject FAILED: ' + e?.message);
+              console.error('Google auth REST API failed', e);
+              debugLog('REST API sign-in FAILED: ' + e?.message);
               setAuthError('Google sign-in failed: ' + (e?.message || 'Unknown error'));
             }
-            setAuthLoading(false);
-            try { const { Browser } = await import('@capacitor/browser'); Browser.close(); } catch (_) {}
-          }
-
-          // Handle legacy google-auth deep links (fallback)
-          if (url.includes('google-auth') && !url.includes('google-auth-session')) {
-            const elapsed = Date.now() - googleAuthStartedAt.current;
-            if (!googleAuthStartedAt.current || elapsed > 120000) {
-              debugLog('Ignoring legacy google-auth deep link (elapsed=' + elapsed + 'ms)');
-              return;
-            }
-            googleAuthStartedAt.current = 0;
-            clearTimeout(googleSafetyTimerRef.current);
-            debugLog('Legacy google-auth deep link — should not happen with new auth-redirect.html');
             setAuthLoading(false);
             try { const { Browser } = await import('@capacitor/browser'); Browser.close(); } catch (_) {}
           }
