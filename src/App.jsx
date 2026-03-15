@@ -57,8 +57,8 @@ const GhostLogo = ({ size = 28 }) => (
   </svg>
 );
 
-// Shows diagnostic text + cancel button if auth loading takes too long
-function AuthLoadingHelper({ authPhase, onCancel }) {
+// Shows diagnostic text while auth is loading (timeout handles cancellation automatically)
+function AuthLoadingHelper({ authPhase }) {
   const [elapsed, setElapsed] = React.useState(0);
   React.useEffect(() => {
     const t = setInterval(() => setElapsed(s => s + 1), 1000);
@@ -68,11 +68,6 @@ function AuthLoadingHelper({ authPhase, onCancel }) {
     <>
       {elapsed >= 3 && (
         <p className="text-gray-700 text-[10px] text-center">{authPhase} ({elapsed}s)</p>
-      )}
-      {elapsed >= 5 && (
-        <button onClick={onCancel} className="text-gray-500 text-xs hover:text-white transition-colors px-4 py-2">
-          Taking too long? Tap to skip
-        </button>
       )}
     </>
   );
@@ -826,7 +821,7 @@ export default function App() {
     return (
       <div className="bg-black min-h-screen flex flex-col items-center justify-center gap-4">
         <Loader2 size={32} className="animate-spin accent-text" />
-        <AuthLoadingHelper authPhase={authPhase} onCancel={() => { setAuthLoading(false); setAuthPhase('cancelled'); }} />
+        <AuthLoadingHelper authPhase={authPhase} />
         <DebugOverlay authPhase={authPhase} cloudUser={cloudUser} authLoading={authLoading} authError={authError} />
       </div>
     );
