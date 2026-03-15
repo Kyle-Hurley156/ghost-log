@@ -192,28 +192,22 @@ export default function App() {
           console.log('[GhostLog] Setting persistence...');
           setAuthPhase('persistence');
           try {
-            await Promise.race([
-              (async () => {
-                try {
-                  // indexedDB works reliably on modern iOS (15+) and is Firebase's preferred method
-                  await setPersistence(auth, indexedDBLocalPersistence);
-                  debugLog('Persistence: indexedDB OK');
-                  console.log('[GhostLog] Persistence set OK (indexedDB)');
-                } catch (idbErr) {
-                  // Fall back to localStorage if indexedDB fails
-                  debugLog('indexedDB failed, trying localStorage: ' + idbErr?.message);
-                  console.warn('[GhostLog] indexedDB persistence failed, trying localStorage:', idbErr?.message);
-                  await setPersistence(auth, browserLocalPersistence);
-                  debugLog('Persistence: localStorage OK');
-                  console.log('[GhostLog] Persistence set OK (localStorage)');
-                }
-              })(),
-              new Promise((_, reject) => setTimeout(() => reject(new Error('persistence timeout')), 5000))
-            ]);
+            if (CapacitorFallback.isNativePlatform()) {
+              // Native (WKWebView/Android WebView): use localStorage directly.
+              // indexedDB hangs in WKWebView, and the hang corrupts Firebase's internal
+              // state so that all subsequent auth operations (signInWithCredential) also hang.
+              await setPersistence(auth, browserLocalPersistence);
+              debugLog('Persistence: localStorage OK (native)');
+              console.log('[GhostLog] Persistence set OK (localStorage, native)');
+            } else {
+              // Web: indexedDB is reliable and preferred
+              await setPersistence(auth, indexedDBLocalPersistence);
+              debugLog('Persistence: indexedDB OK (web)');
+              console.log('[GhostLog] Persistence set OK (indexedDB, web)');
+            }
           } catch (persistErr) {
-            // Don't let persistence failure or timeout block auth — continue with default
-            debugLog('Persistence failed/timeout: ' + persistErr?.message);
-            console.warn('[GhostLog] setPersistence failed/timeout, continuing:', persistErr?.message);
+            debugLog('Persistence failed: ' + persistErr?.message);
+            console.warn('[GhostLog] setPersistence failed, continuing with default:', persistErr?.message);
           }
 
           // Handle magic link sign-in (must run after Firebase init)
@@ -364,7 +358,10 @@ export default function App() {
           if (idToken || accessToken) {
             const auth = getAuth();
             const credential = GoogleAuthProvider.credential(idToken, accessToken);
-            const result = await signInWithCredential(auth, credential);
+            const result = await Promise.race([
+              signInWithCredential(auth, credential),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('signInWithCredential hung for 10s')), 10000))
+            ]);
             clearTimeout(googleSafetyTimerRef.current);
             console.log('[GhostLog] Google signInWithCredential success');
             if (result?.user) {
@@ -563,7 +560,10 @@ export default function App() {
                 debugLog('Calling signInWithCredential (idToken length=' + (idToken?.length || 0) + ')');
                 const auth = getAuth();
                 const credential = GoogleAuthProvider.credential(idToken, accessToken);
-                const result = await signInWithCredential(auth, credential);
+                const result = await Promise.race([
+                  signInWithCredential(auth, credential),
+                  new Promise((_, reject) => setTimeout(() => reject(new Error('signInWithCredential hung for 10s')), 10000))
+                ]);
                 console.log('signInWithCredential success');
                 debugLog('signInWithCredential OK: ' + result?.user?.email);
                 if (result?.user) {
