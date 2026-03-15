@@ -153,6 +153,8 @@ export default function App() {
   const authUnsubscribeRef = useRef(null);
   // Track whether onAuthStateChanged has resolved at least once (prevents deep link interference)
   const authResolvedRef = useRef(false);
+  // Google auth safety timer ref — shared so the deep link handler can clear it
+  const googleSafetyTimerRef = useRef(null);
 
   useEffect(() => {
     const setupRevenueCat = async (firebaseUid) => {
@@ -335,8 +337,11 @@ export default function App() {
     setAuthPhase('google-auth');
     setAuthError(null);
     // Safety: force stop loading after 15s (Google auth can be slow)
-    const safetyTimer = setTimeout(() => {
+    // Stored in ref so deep link handler can clear it on success
+    clearTimeout(googleSafetyTimerRef.current);
+    googleSafetyTimerRef.current = setTimeout(() => {
       console.warn('[GhostLog] Google auth safety timeout hit');
+      debugLog('Google auth safety timeout (15s)');
       setAuthLoading(false);
       setAuthPhase('google-timeout');
     }, 15000);
@@ -365,7 +370,7 @@ export default function App() {
             const auth = getAuth();
             const credential = GoogleAuthProvider.credential(idToken, accessToken);
             const result = await signInWithCredential(auth, credential);
-            clearTimeout(safetyTimer);
+            clearTimeout(googleSafetyTimerRef.current);
             console.log('[GhostLog] Google signInWithCredential success');
             if (result?.user) {
               setCloudUser(result.user);
@@ -374,7 +379,7 @@ export default function App() {
               loadCloudData(result.user.uid);
             }
           } else {
-            clearTimeout(safetyTimer);
+            clearTimeout(googleSafetyTimerRef.current);
             setAuthError('No token received from Google sign-in');
           }
           setAuthLoading(false);
@@ -382,10 +387,11 @@ export default function App() {
           // WebAuth plugin not available (e.g. older TestFlight build) — fall back to Browser
           if (String(pluginErr).includes('UNIMPLEMENTED') || String(pluginErr).includes('not implemented')) {
             console.warn('WebAuth plugin not available, falling back to Browser plugin');
+            debugLog('WebAuth UNIMPLEMENTED, using Browser fallback');
             googleAuthStartedAt.current = Date.now();
             const { Browser } = await import('@capacitor/browser');
             await Browser.open({ url: 'https://ghost-log.vercel.app/auth-redirect.html' });
-            // Auth completion handled by appUrlOpen listener (may not work on older iOS builds)
+            // Auth completion handled by appUrlOpen listener — safetyTimer stays active via ref
           } else {
             throw pluginErr;
           }
@@ -402,7 +408,7 @@ export default function App() {
         const provider = new GoogleAuthProvider();
         const result = await signInWithPopup(auth, provider);
         if (result?.user) {
-          clearTimeout(safetyTimer);
+          clearTimeout(googleSafetyTimerRef.current);
           setCloudUser(result.user);
           setCloudStatus('synced');
           setAuthPhase('authenticated');
@@ -411,7 +417,7 @@ export default function App() {
         }
       }
     } catch (e) {
-      clearTimeout(safetyTimer);
+      clearTimeout(googleSafetyTimerRef.current);
       console.error('[GhostLog] Google sign-in error:', e?.code, e?.message, e);
       const msg = e?.message || '';
       const code = e?.code || e || '';
@@ -548,7 +554,9 @@ export default function App() {
               return;
             }
             googleAuthStartedAt.current = 0; // Consume — prevents replay of same deep link
+            clearTimeout(googleSafetyTimerRef.current); // Cancel the 15s safety timer
             setAuthLoading(true); // Show spinner while processing (may have been cleared by timeout)
+            debugLog('Processing google-auth deep link (elapsed=' + elapsed + 'ms)');
             try {
               const qs = url.split('?')[1] || '';
               const params = new URLSearchParams(qs);
@@ -557,11 +565,12 @@ export default function App() {
               console.log('Google tokens received — idToken:', !!idToken, 'accessToken:', !!accessToken);
               debugLog('Google tokens: id=' + !!idToken + ' access=' + !!accessToken);
               if (idToken || accessToken) {
+                debugLog('Calling signInWithCredential (idToken length=' + (idToken?.length || 0) + ')');
                 const auth = getAuth();
                 const credential = GoogleAuthProvider.credential(idToken, accessToken);
                 const result = await signInWithCredential(auth, credential);
                 console.log('signInWithCredential success');
-                debugLog('signInWithCredential OK');
+                debugLog('signInWithCredential OK: ' + result?.user?.email);
                 if (result?.user) {
                   setCloudUser(result.user);
                   setCloudStatus('synced');
@@ -569,12 +578,13 @@ export default function App() {
                   loadCloudData(result.user.uid);
                 }
               } else {
+                debugLog('No tokens in deep link URL');
                 setAuthError('No token received from Google sign-in');
               }
             } catch (e) {
               console.error('Google deep link auth failed', e);
-              debugLog('Google deep link FAILED: ' + e?.message);
-              setAuthError('Google sign-in failed: ' + (e?.message || ''));
+              debugLog('Google deep link FAILED: code=' + (e?.code || 'none') + ' msg=' + e?.message);
+              setAuthError('Google sign-in failed: ' + (e?.code || e?.message || 'Unknown error'));
             }
             setAuthLoading(false);
             try { const { Browser } = await import('@capacitor/browser'); Browser.close(); } catch (_) {}
