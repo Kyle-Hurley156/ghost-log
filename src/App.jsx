@@ -72,9 +72,29 @@ async function firebaseRestGoogleSignIn(googleIdToken) {
   return response.json();
 }
 
+// REST API for email link sign-in (magic link).
+// signInWithEmailLink internally calls signInWithCredential which hangs in WKWebView.
+async function firebaseRestEmailLinkSignIn(email, oobCode) {
+  const apiKey = FIREBASE_CONFIG.apiKey;
+  const response = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/accounts:signInWithEmailLink?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, oobCode }),
+    }
+  );
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData?.error?.message || `Email link sign-in failed (${response.status})`);
+  }
+  return response.json();
+}
+
 // Inject Firebase user session into localStorage so Firebase picks it up on reload.
 // Format matches Firebase SDK's UserImpl.toJSON() exactly.
-function injectFirebaseSession(restResponse) {
+// provider: 'google.com' for Google, 'password' for email/magic link
+function injectFirebaseSession(restResponse, provider = 'google.com') {
   const apiKey = FIREBASE_CONFIG.apiKey;
   const key = `firebase:authUser:${apiKey}:[DEFAULT]`;
   const userObj = {
@@ -85,8 +105,8 @@ function injectFirebaseSession(restResponse) {
     isAnonymous: false,
     photoURL: restResponse.photoUrl || '',
     providerData: [{
-      providerId: 'google.com',
-      uid: restResponse.localId,
+      providerId: provider,
+      uid: provider === 'google.com' ? restResponse.localId : (restResponse.email || ''),
       displayName: restResponse.displayName || '',
       email: restResponse.email || '',
       phoneNumber: null,
@@ -652,40 +672,49 @@ export default function App() {
 
           // Handle magic link deep link from Safari redirect
           // URL format: com.ghostlog.app://magic-link?url=<encoded-firebase-magic-link-url>
+          // Uses REST API because signInWithEmailLink internally calls signInWithCredential
+          // which hangs in WKWebView.
           if (url.includes('magic-link')) {
             console.log('Magic link deep link received');
+            debugLog('Magic link deep link received');
             setAuthLoading(true);
             try {
               const qs = url.split('?')[1] || '';
               const params = new URLSearchParams(qs);
               const magicUrl = params.get('url');
-              console.log('Magic link URL:', magicUrl);
+              debugLog('Magic link URL: ' + (magicUrl || 'null')?.substring(0, 80));
               if (magicUrl) {
-                const auth = getAuth();
-                if (isSignInWithEmailLink(auth, magicUrl)) {
-                  let email = window.localStorage.getItem('ghostlog_magic_email');
-                  if (!email) email = window.prompt('Enter your email to confirm sign-in:');
-                  if (email) {
-                    await signInWithEmailLink(auth, email, magicUrl);
-                    window.localStorage.removeItem('ghostlog_magic_email');
-                    console.log('Magic link sign-in success');
-                  } else {
-                    setAuthError('Email is required to complete sign-in.');
-                  }
+                // Extract oobCode from the magic link URL
+                const magicParams = new URLSearchParams(new URL(magicUrl).search);
+                const oobCode = magicParams.get('oobCode');
+                const email = window.localStorage.getItem('ghostlog_magic_email');
+                debugLog('Magic link oobCode: ' + (oobCode ? 'present' : 'missing') + ', email: ' + (email || 'missing'));
+                if (oobCode && email) {
+                  // Use REST API to bypass signInWithCredential hang in WKWebView
+                  debugLog('Calling REST API for email link sign-in...');
+                  const restResult = await firebaseRestEmailLinkSignIn(email, oobCode);
+                  injectFirebaseSession(restResult, 'password');
+                  window.localStorage.removeItem('ghostlog_magic_email');
+                  debugLog('Magic link sign-in success via REST API, reloading...');
+                  window.location.reload();
+                  return;
+                } else if (!email) {
+                  setAuthError('Email not found. Please try sending the magic link again.');
+                  setToastMsg('Email not found — try sending the magic link again');
                 } else {
-                  setAuthError('Invalid magic link. Please request a new one.');
+                  setAuthError('Invalid magic link (no code). Please request a new one.');
+                  setToastMsg('Invalid magic link — request a new one');
                 }
               } else {
                 setAuthError('No magic link URL received.');
+                setToastMsg('No magic link URL received');
               }
             } catch (e) {
-              console.error('Magic link deep link auth failed', e);
-              const code = e?.code || '';
-              if (code === 'auth/invalid-action-code' || code === 'auth/expired-action-code') {
-                setAuthError('This magic link has expired. Please request a new one.');
-              } else {
-                setAuthError('Magic link sign-in failed: ' + (e?.message || ''));
-              }
+              console.error('Magic link REST API sign-in failed', e);
+              debugLog('Magic link REST FAILED: ' + e?.message);
+              const errMsg = 'Magic link sign-in failed: ' + (e?.message || 'Unknown error');
+              setAuthError(errMsg);
+              setToastMsg(errMsg);
             }
             setAuthLoading(false);
           }
