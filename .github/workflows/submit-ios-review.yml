@@ -152,20 +152,34 @@ jobs:
                   print(f"  -> Using matching version {ver} (ID: {version_id})")
                   break
 
-          # Strategy 2: If no matching version, delete any REJECTED versions blocking creation
+          # Strategy 2: Reuse a PREPARE_FOR_SUBMISSION version with wrong version string
+          if not version_id:
+              for v in all_versions["data"]:
+                  state = v["attributes"]["appStoreState"]
+                  ver = v["attributes"]["versionString"]
+                  if state == "PREPARE_FOR_SUBMISSION" and ver != version:
+                      version_id = v["id"]
+                      print(f"  -> Updating version {ver} to {version} (ID: {version_id})")
+                      api_patch(f"/appStoreVersions/{version_id}", {
+                          "data": {
+                              "type": "appStoreVersions",
+                              "id": version_id,
+                              "attributes": {"versionString": version}
+                          }
+                      })
+                      print(f"  Version string updated to {version}")
+                      break
+
+          # Strategy 3: Delete REJECTED versions and create fresh
           if not version_id:
               for v in all_versions["data"]:
                   state = v["attributes"]["appStoreState"]
                   ver = v["attributes"]["versionString"]
                   if state in ["REJECTED", "DEVELOPER_REJECTED", "METADATA_REJECTED"]:
-                      print(f"  Deleting old {state} version {ver} to unblock new version creation...")
+                      print(f"  Deleting old {state} version {ver}...")
                       r = requests.delete(f"{base_url}/appStoreVersions/{v['id']}", headers=headers)
-                      if r.status_code in (200, 204):
-                          print(f"  Deleted version {ver}")
-                      else:
-                          print(f"  Warning: could not delete version {ver} ({r.status_code})")
+                      print(f"  Delete result: {r.status_code}")
 
-              # Now create the new version
               print(f"Creating new appStoreVersion {version}...")
               result, status, text = api_post("/appStoreVersions", {
                   "data": {
@@ -184,8 +198,8 @@ jobs:
               version_id = result["data"]["id"]
               print(f"Created appStoreVersion: {version_id}")
 
-          # If we found an existing editable version, select the build for it
-          else:
+          # Select the build for whichever version we ended up with
+          if version_id:
               print(f"Selecting build #{build_number} for version...")
               api_patch(f"/appStoreVersions/{version_id}/relationships/build", {
                   "data": {"type": "builds", "id": build_id}
