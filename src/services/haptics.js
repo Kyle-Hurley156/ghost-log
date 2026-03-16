@@ -12,27 +12,31 @@ const getHaptics = async () => {
   } catch (e) { return null; }
 };
 
-export const hapticLight = async () => {
-  const h = await getHaptics();
-  if (h) h.impact({ style: 'LIGHT' }).catch(() => {});
-};
+// Wrap every haptic call so no error ever leaks as an unhandled rejection.
+// Capacitor's native proxy can throw on .then() checks in async contexts.
+const safe = (fn) => async () => { try { await fn(); } catch (_) {} };
 
-export const hapticMedium = async () => {
+export const hapticLight = safe(async () => {
   const h = await getHaptics();
-  if (h) h.impact({ style: 'MEDIUM' }).catch(() => {});
-};
+  if (h) await h.impact({ style: 'LIGHT' });
+});
 
-export const hapticHeavy = async () => {
+export const hapticMedium = safe(async () => {
   const h = await getHaptics();
-  if (h) h.impact({ style: 'HEAVY' }).catch(() => {});
-};
+  if (h) await h.impact({ style: 'MEDIUM' });
+});
 
-export const hapticSuccess = async () => {
+export const hapticHeavy = safe(async () => {
   const h = await getHaptics();
-  if (h) h.notification({ type: 'SUCCESS' }).catch(() => {});
-};
+  if (h) await h.impact({ style: 'HEAVY' });
+});
 
-export const hapticSelection = async () => {
+export const hapticSuccess = safe(async () => {
   const h = await getHaptics();
-  if (h) h.selectionChanged().catch(() => {});
-};
+  if (h) await h.notification({ type: 'SUCCESS' });
+});
+
+export const hapticSelection = safe(async () => {
+  const h = await getHaptics();
+  if (h) await h.selectionChanged();
+});

@@ -76,8 +76,9 @@
         if (loader) loader.style.display = 'none';
       }
       window.onerror = function(msg, url, line) { showError(msg + ' (' + url + ':' + line + ')'); };
-      window.addEventListener('unhandledrejection', function(e) { showError('Unhandled: ' + (e.reason && e.reason.message || e.reason)); });
       // Hide loader + disable error handlers once React mounts
+      var _rejectionHandler = function(e) { showError('Unhandled: ' + (e.reason && e.reason.message || e.reason)); };
+      window.addEventListener('unhandledrejection', _rejectionHandler);
       var _mo = new MutationObserver(function() {
         if (document.getElementById('root').children.length > 0) {
           var loader = document.getElementById('app-loader');
@@ -85,6 +86,7 @@
           var err = document.getElementById('startup-error');
           if (err) err.style.display = 'none';
           window.onerror = null;
+          window.removeEventListener('unhandledrejection', _rejectionHandler);
           _mo.disconnect();
         }
       });
