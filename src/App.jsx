@@ -468,7 +468,9 @@ export default function App() {
       const code = e?.code || e || '';
       // Don't show error for user cancellation
       if (e?.code !== 'auth/popup-closed-by-user' && !msg.includes('canceled') && !msg.includes('cancelled') && code !== 'CANCELLED') {
-        setAuthError(`Google sign-in failed: ${e?.code || e?.message || 'Unknown error'}`);
+        const errMsg = `Google sign-in failed: ${e?.code || e?.message || 'Unknown error'}`;
+        setAuthError(errMsg);
+        setToastMsg(errMsg);
       }
       setAuthPhase('error');
       setAuthLoading(false);
@@ -617,7 +619,9 @@ export default function App() {
             } catch (e) {
               console.error('Google auth REST API failed', e);
               debugLog('REST API sign-in FAILED: ' + e?.message);
-              setAuthError('Google sign-in failed: ' + (e?.message || 'Unknown error'));
+              const errMsg = 'Google sign-in failed: ' + (e?.message || 'Unknown error');
+              setAuthError(errMsg);
+              setToastMsg(errMsg);
             }
             setAuthLoading(false);
             try { const { Browser } = await import('@capacitor/browser'); Browser.close(); } catch (_) {}
@@ -871,7 +875,8 @@ export default function App() {
 
         {showOnboarding && <OnboardingModal onComplete={() => { setShowOnboarding(false); setLogDate(getLocalDate()); setShowDailyCheckin(true); }} setPhase={setPhase} setUserTargets={setUserTargets} userTargets={userTargets} />}
 
-        <SettingsPanel show={showSettings} onClose={() => setShowSettings(false)} onLogout={handleLogout} userEmail={cloudUser?.email} requestConfirm={requestConfirm} onGoogle={handleGoogleSignIn} onAuth={handleAuth} authLoading={authLoading} authError={authError} />
+        <SettingsPanel show={showSettings} onClose={() => setShowSettings(false)} onLogout={handleLogout} userEmail={cloudUser?.email} requestConfirm={requestConfirm} onGoogle={handleGoogleSignIn} onAuth={handleAuth} onMagicLink={handleMagicLink} onForgotPassword={handleForgotPassword} authLoading={authLoading} authError={authError} />
+        <DebugOverlay authPhase={authPhase} cloudUser={cloudUser} authLoading={authLoading} authError={authError} />
 
         <DailyCheckinModal isOpen={showDailyCheckin} onClose={()=>setShowDailyCheckin(false)} stats={dailyStatsInput} setStats={setDailyStatsInput} onSave={submitDailyLog} date={logDate} setDate={setLogDate}/>
 

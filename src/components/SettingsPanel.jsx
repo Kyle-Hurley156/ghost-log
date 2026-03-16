@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import { X, LogOut, Shield, FileText, Info, ExternalLink, Trash2, Mail, Cloud, CloudOff, Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { APP_VERSION } from '../constants';
 
-export const SettingsPanel = ({ show, onClose, onLogout, userEmail, requestConfirm, onGoogle, onAuth, authLoading, authError }) => {
+export const SettingsPanel = ({ show, onClose, onLogout, userEmail, requestConfirm, onGoogle, onAuth, onMagicLink, onForgotPassword, authLoading, authError }) => {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
   const isSignedIn = !!userEmail;
 
   const handleSubmit = (e) => {
@@ -83,6 +84,27 @@ export const SettingsPanel = ({ show, onClose, onLogout, userEmail, requestConfi
                 <button onClick={() => setIsSignUp(!isSignUp)} className="w-full text-[11px] text-gray-500 mt-2 hover:text-gray-300 transition-colors">
                   {isSignUp ? 'Already have an account? Log in' : "Don't have an account? Sign up"}
                 </button>
+                {!isSignUp && (
+                  <div className="flex justify-between mt-2 pt-2 border-t border-gray-800">
+                    <button onClick={async () => {
+                      if (loginEmail && onForgotPassword) {
+                        const ok = await onForgotPassword(loginEmail);
+                        if (ok) setMagicLinkSent('Reset email sent!');
+                      }
+                    }} disabled={!loginEmail} className="text-[11px] text-gray-500 hover:text-gray-300 transition-colors disabled:opacity-30">
+                      Forgot password?
+                    </button>
+                    <button onClick={async () => {
+                      if (loginEmail && onMagicLink) {
+                        const ok = await onMagicLink(loginEmail);
+                        if (ok) setMagicLinkSent('Magic link sent!');
+                      }
+                    }} disabled={!loginEmail} className="text-[11px] accent-text hover:opacity-80 transition-colors disabled:opacity-30">
+                      Magic link
+                    </button>
+                  </div>
+                )}
+                {magicLinkSent && <p className="text-green-400 text-xs px-1 mt-2">{magicLinkSent}</p>}
               </div>
               {authError && <p className="text-red-400 text-xs px-1">{authError}</p>}
             </div>
