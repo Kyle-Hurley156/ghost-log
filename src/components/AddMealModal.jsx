@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Search, Camera, Loader2, Trash2, ChevronRight, Sparkles } from 'lucide-react';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { API_URL } from '../constants';
 import { parseAIResponse } from '../helpers';
 import { searchFood, lookupBarcode } from '../services/foodLookup';
@@ -40,12 +40,27 @@ export const AddMealModal = ({ isOpen, onClose, onSave, setToast, aiCooldown, se
       }
 
       try {
-        const html5QrCode = new Html5Qrcode("barcode-reader");
+        const html5QrCode = new Html5Qrcode("barcode-reader", {
+          formatsToSupport: [
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.QR_CODE,
+          ],
+          experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+        });
         scannerRef.current = html5QrCode;
+
+        // Responsive scan region — use 80% of container width, barcode-height aspect
+        const containerWidth = el.clientWidth || 300;
+        const qrboxWidth = Math.min(Math.round(containerWidth * 0.85), 400);
+        const qrboxHeight = Math.round(qrboxWidth * 0.4);
 
         await html5QrCode.start(
           { facingMode: "environment" },
-          { fps: 10, qrbox: { width: 250, height: 100 }, aspectRatio: 1.0 },
+          { fps: 15, qrbox: { width: qrboxWidth, height: qrboxHeight }, aspectRatio: 1.333 },
           async (decodedText) => {
             // Barcode detected — auto-process immediately
             await html5QrCode.stop();
@@ -58,6 +73,9 @@ export const AddMealModal = ({ isOpen, onClose, onSave, setToast, aiCooldown, se
               if (product) {
                 setCurrentFood({ name: product.name, cal: product.cal, p: product.p, c: product.c, f: product.f });
                 setSearchQuery(product.brand ? `${product.name} (${product.brand})` : product.name);
+                // Auto-fill weight from serving size if available (e.g. "150g", "200 ml")
+                const servingMatch = product.servingSize?.match(/(\d+)\s*(g|ml)/i);
+                if (servingMatch) setWeight(servingMatch[1]);
                 setSearchSource('Barcode');
                 setToast(`Found: ${product.name}`);
               } else {
@@ -173,13 +191,16 @@ export const AddMealModal = ({ isOpen, onClose, onSave, setToast, aiCooldown, se
 
       const response = await fetch(API_URL, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: `Identify food in image. Return JSON per 100g: {"name":string,"cal":number,"p":number,"c":number,"f":number} ONLY JSON`, isImage: true, imageData })
+        body: JSON.stringify({ prompt: `Identify ALL food visible in this image. Estimate the TOTAL macros for the ENTIRE portion shown (not per 100g). Also estimate the total weight in grams. Return JSON: {"name":string,"cal":number,"p":number,"c":number,"f":number,"weight":number} where cal/p/c/f are TOTALS for everything visible. ONLY JSON`, isImage: true, imageData })
       });
       const data = await response.json();
       if (!response.ok || !data.candidates) throw new Error("Scan Failed");
       const result = parseAIResponse(data.candidates[0].content.parts[0].text);
       setSearchQuery(result.name);
+      // AI returns TOTAL macros for visible food — set weight to 100 so
+      // addIngredient's weight/100 multiplier = 1.0, preserving the totals
       setCurrentFood({ name: result.name, cal: result.cal, p: result.p, c: result.c, f: result.f });
+      setWeight('100');
       setSearchSource('Ghost Vision');
       setAiCooldown(5);
     } catch (e) {
@@ -288,7 +309,7 @@ export const AddMealModal = ({ isOpen, onClose, onSave, setToast, aiCooldown, se
                     {searchSource === 'Ghost AI' || searchSource === 'Ghost Vision' ? <Sparkles size={10} className="inline mr-1"/> : null}
                     {searchSource}
                   </span>
-                  <span className="text-[10px] text-gray-600">per 100g</span>
+                  <span className="text-[10px] text-gray-600">{searchSource === 'Ghost Vision' ? 'total estimated' : 'per 100g'}</span>
                 </div>
               )}
 
