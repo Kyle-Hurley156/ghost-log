@@ -1,0 +1,19 @@
+name: Extract Issuer ID
+on:
+  workflow_dispatch:
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Output Issuer ID
+        env:
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          # Write to artifact file (not logs, so masking doesn't apply)
+          echo "$ISSUER_ID" > issuer.txt
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: issuer
+          path: issuer.txt
+          retention-days: 1
