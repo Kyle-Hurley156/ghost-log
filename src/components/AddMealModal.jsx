@@ -219,8 +219,22 @@ export const AddMealModal = ({ isOpen, onClose, onSave, setToast, aiCooldown, se
 
         {/* Meal name */}
         <div className="px-4 pb-2 shrink-0">
-          <input type="text" placeholder="Meal Name" value={mealName} onChange={e => setMealName(e.target.value)} className="w-full bg-black/50 p-2.5 rounded-xl text-white text-sm border border-gray-800/50 outline-none focus:accent-border"/>
+          <input type="text" placeholder="Meal Name (e.g. Breakfast)" value={mealName} onChange={e => setMealName(e.target.value)} className="w-full bg-black/50 p-2.5 rounded-xl text-white text-sm border border-gray-800/50 outline-none focus:accent-border"/>
         </div>
+
+        {/* Quick instructions — only show when no ingredients added yet */}
+        {ingredients.length === 0 && !scanning && !searchQuery && (
+          <div className="px-4 pb-2 shrink-0">
+            <div className="bg-gray-900/30 rounded-lg p-3 border border-gray-800/30">
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1.5">How to add ingredients</p>
+              <div className="space-y-1">
+                <p className="text-[10px] text-gray-500 flex items-start gap-2"><Search size={10} className="shrink-0 mt-0.5 text-gray-600"/> <span><span className="text-gray-400">Search</span> — type a food name and hit enter</span></p>
+                <p className="text-[10px] text-gray-500 flex items-start gap-2"><Camera size={10} className="shrink-0 mt-0.5 text-gray-600"/> <span><span className="text-gray-400">Scan</span> — tap camera to scan a barcode (auto-detects)</span></p>
+                <p className="text-[10px] text-gray-500 flex items-start gap-2"><Sparkles size={10} className="shrink-0 mt-0.5 text-gray-600"/> <span><span className="text-gray-400">AI Snap</span> — while camera is open, tap SNAP FOR AI to photograph food</span></p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Ingredients — compact scrollable if many */}
         {ingredients.length > 0 && (

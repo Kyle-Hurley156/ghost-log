@@ -42,13 +42,15 @@ export const GhostAiPanel = ({ show, onClose, workoutHistory = [], setToast }) =
   };
 
   const faqItems = [
-    { q: 'How do I track a workout?', a: 'Go to LIFT tab, tap a split or "Empty Workout", fill in weight & reps, tap the checkmark, then FINISH.' },
-    { q: 'How does barcode scanning work?', a: 'In EAT tab, create a meal, tap the camera icon. Point at a barcode and it auto-detects. Tap SNAP FOR AI to photograph food instead.' },
-    { q: 'What is Ghost Chef?', a: 'Ghost Chef generates a meal that fits your remaining macros perfectly. Find it in the EAT tab (Pro feature).' },
-    { q: 'How do targets work?', a: 'Tap the CUT/BULK badge in the header. Use the wand to auto-calculate calories & protein based on your weight (Pro).' },
-    { q: 'Is my data saved?', a: 'Yes. All data syncs to the cloud when you\'re logged in. It persists across devices, updates, and reinstalls.' },
-    { q: 'How do I export my data?', a: 'Go to STATS tab and tap EXPORT. You\'ll get a CSV with all your stats and workout history (Pro).' },
-    { q: 'How do I add custom exercises?', a: 'When adding an exercise, type a name that\'s not in the database. Tap "+ Create" to save it permanently.' },
+    { q: 'How do I track a workout?', a: 'Go to LIFT, tap a workout split (or "Empty Workout"). Fill in weight and reps for each set, tap the green checkmark to mark it done, then tap FINISH when you\'re done.' },
+    { q: 'How does barcode scanning work?', a: 'In EAT, tap + NEW to create a meal. Tap the camera icon next to the search bar. Point your camera at any barcode — it auto-detects and fills in the nutrition info instantly.' },
+    { q: 'What is AI Food Snap?', a: 'While the camera is open for barcode scanning, tap SNAP FOR AI instead. This takes a photo and Ghost Vision AI identifies the food and estimates its macros per 100g.' },
+    { q: 'What is Ghost Chef?', a: 'Ghost Chef generates a complete meal with ingredients that fit your remaining daily macros. Find the CHEF button in the EAT tab. Pro feature.' },
+    { q: 'How do targets work?', a: 'Tap the CUT/BULK badge at the top of the screen. Use the wand icon to auto-calculate your ideal calories and protein based on your body weight and goal. Pro feature.' },
+    { q: 'Is my data saved?', a: 'Data is always saved locally on your device. Sign in via Settings to sync across devices — your data persists through updates and reinstalls.' },
+    { q: 'What does the readiness score do?', a: 'Before each workout, Ghost calculates your readiness from sleep, stress, and fatigue data. If you\'re fatigued, targets are lowered. If you\'re primed, they\'re increased.' },
+    { q: 'How do I export my data?', a: 'Go to STATS and tap EXPORT. You\'ll get a CSV file with your full stats and workout history. Pro feature.' },
+    { q: 'How do I add custom exercises?', a: 'When adding an exercise to a workout, type a name that isn\'t in the database. A "+ Create" button appears — tap it to save the exercise permanently.' },
   ];
 
   return (
@@ -66,11 +68,13 @@ export const GhostAiPanel = ({ show, onClose, workoutHistory = [], setToast }) =
 
         {/* Feature Cards */}
         <div className="space-y-3 mb-6">
+          <p className="text-[10px] text-gray-600 font-bold uppercase tracking-wider">Features</p>
           {[
-            { icon: Target, title: 'Smart Targets', desc: 'Tap the CUT/BULK badge in the header. Use the wand to auto-calculate calories & protein.' },
-            { icon: ChefHat, title: 'Ghost Chef', desc: 'In EAT tab, ask Ghost to generate a meal that fits your remaining macros.' },
-            { icon: Camera, title: 'Food Scanner', desc: 'Tap camera when adding ingredients. Barcodes auto-scan, or snap food for AI.' },
-            { icon: BarChart3, title: 'Ghost Report', desc: 'In STATS, tap Analyze for an AI critique of your training and nutrition.' },
+            { icon: Target, title: 'Smart Targets', desc: 'Tap the CUT/BULK badge in the header, then tap the wand icon. Ghost AI calculates your ideal calories and protein based on your weight and goal.' },
+            { icon: ChefHat, title: 'Ghost Chef', desc: 'In EAT tab, tap the CHEF button. Tell Ghost what you want and it generates a full meal with macros that fit your remaining daily targets.' },
+            { icon: Camera, title: 'Barcode Scanner', desc: 'In EAT tab, tap + NEW to create a meal, then tap the camera icon. Point at any barcode — it auto-detects instantly and fills in the nutrition.' },
+            { icon: Sparkles, title: 'AI Food Snap', desc: 'While the camera is open, tap SNAP FOR AI to photograph any food. Ghost Vision identifies it and estimates macros per 100g.' },
+            { icon: BarChart3, title: 'Ghost Report', desc: 'In STATS tab, tap ANALYZE. Ghost AI reviews your last week of training, nutrition and recovery, then gives 3 actionable bullet points.' },
           ].map((item, i) => (
             <div key={i} className="bg-gray-900/50 p-3 rounded-xl border border-gray-800/50">
               <div className="flex items-center gap-2 mb-1">

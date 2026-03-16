@@ -121,7 +121,7 @@ export const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workou
               {loadingReport ? <Loader2 size={12} className="animate-spin"/> : aiCooldown > 0 ? `RESTING (${aiCooldown}s)` : <>ANALYZE {!isPro && <Lock size={10}/>}</>}
             </button>
           </div>
-          <div className="text-sm text-gray-300 leading-relaxed whitespace-pre-line">{ghostReport || <span className="text-gray-600">Tap analyze for AI insights...</span>}</div>
+          <div className="text-sm text-gray-300 leading-relaxed whitespace-pre-line">{ghostReport || <span className="text-gray-600 text-xs">Tap ANALYZE to get a personalized AI critique of your training, nutrition, and recovery from the past week.</span>}</div>
        </div>
 
        {/* Stat pills + time range */}
@@ -143,7 +143,13 @@ export const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workou
        <div className="bg-gray-900/50 p-4 rounded-xl border border-gray-800/50 min-h-[200px] relative mb-8">
           <div className="flex justify-between mb-6"><h3 className="text-white font-bold text-sm capitalize">{localStat === 'cals' ? 'Energy Intake' : localStat} Trend</h3></div>
           <div className="absolute inset-0 top-16 bottom-8 left-4 right-4 flex items-end justify-between">
-             {filteredHistory.length === 0 ? <p className="text-gray-600 text-center w-full self-center text-xs">No data yet.</p> : (
+             {filteredHistory.length === 0 ? (
+               <div className="text-center w-full self-center">
+                 <Edit3 size={20} className="mx-auto mb-2 text-gray-700"/>
+                 <p className="text-gray-600 text-xs">No data yet</p>
+                 <p className="text-gray-700 text-[10px] mt-0.5">Tap LOG ENTRY to start tracking.</p>
+               </div>
+             ) : (
                <svg className="w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
                  <polyline fill="none" stroke="var(--accent)" strokeWidth="2" points={polylinePoints} vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round"/>
                  {filteredHistory.map((d, i) => {
@@ -171,7 +177,13 @@ export const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workou
        {/* Recent Activity */}
        <div className="pb-10">
          <h3 className="text-gray-500 font-bold text-[10px] uppercase mb-3 tracking-[0.2em]">Recent Activity</h3>
-         {recentActivity.length === 0 ? <p className="text-gray-700 text-sm">No workouts yet.</p> : (
+         {recentActivity.length === 0 ? (
+           <div className="bg-gray-900/50 rounded-xl p-6 border border-gray-800/50 text-center">
+             <Dumbbell size={24} className="mx-auto mb-2 text-gray-700"/>
+             <p className="text-gray-500 text-sm">No workouts yet</p>
+             <p className="text-gray-700 text-xs mt-1">Complete a workout in LIFT to see your activity here.</p>
+           </div>
+         ) : (
            <div className="space-y-2">
              {recentActivity.map((session, i) => (
                <div key={i} className="bg-gray-900/50 p-3 rounded-xl border border-gray-800/50 flex justify-between items-center">

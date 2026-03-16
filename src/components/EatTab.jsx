@@ -15,7 +15,11 @@ export const EatTab = ({ savedMeals, dailyLog, mealEditMode, setMealEditMode, se
       </div>
 
       {savedMeals.length === 0 ? (
-        <div className="bg-gray-900/50 rounded-xl p-6 border border-gray-800/50 text-center text-gray-600 mb-6">No meals saved yet. Add one!</div>
+        <div className="bg-gray-900/50 rounded-xl p-8 border border-gray-800/50 text-center mb-6">
+          <Flame size={28} className="mx-auto mb-3 text-gray-700"/>
+          <p className="text-gray-400 text-sm font-medium mb-1">No meals saved yet</p>
+          <p className="text-gray-600 text-xs">Tap <span className="accent-text font-bold">+ NEW</span> to create your first meal, or let <span className="accent-text font-bold">CHEF</span> generate one for you.</p>
+        </div>
       ) : savedMeals.map((meal, i) => {
         const macros = getMealMacros(meal);
         return (
@@ -56,7 +60,12 @@ export const EatTab = ({ savedMeals, dailyLog, mealEditMode, setMealEditMode, se
           <h2 className="text-gray-500 font-bold text-[10px] tracking-[0.2em] uppercase">Today's Log</h2>
           <span className="text-[10px] text-gray-600 font-bold">{userTargets.cal} kcal goal</span>
         </div>
-        {dailyLog.length === 0 && <div className="bg-gray-900/50 rounded-xl p-6 border border-gray-800/50 text-center text-gray-600">No meals logged today.</div>}
+        {dailyLog.length === 0 && (
+          <div className="bg-gray-900/50 rounded-xl p-6 border border-gray-800/50 text-center">
+            <p className="text-gray-500 text-sm">No meals logged today</p>
+            <p className="text-gray-700 text-xs mt-1">Tap the <span className="text-white font-bold">+</span> button on a saved meal to log it.</p>
+          </div>
+        )}
         {dailyLog.map((log, i) => (
           <div key={i} className="flex justify-between items-center bg-black/30 p-3 rounded-xl border border-gray-800/50 group mb-2">
             <div>
