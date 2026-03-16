@@ -8,7 +8,7 @@ import { Capacitor } from '@capacitor/core';
 import { Purchases } from '@revenuecat/purchases-capacitor';
 
 import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, browserLocalPersistence, indexedDBLocalPersistence, setPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithCredential, signInWithPopup, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, sendPasswordResetEmail, verifyPasswordResetCode, confirmPasswordReset } from 'firebase/auth';
+import { initializeAuth, getAuth, browserLocalPersistence, indexedDBLocalPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithCredential, signInWithPopup, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, sendPasswordResetEmail, verifyPasswordResetCode, confirmPasswordReset } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
 
 import { FIREBASE_CONFIG, INITIAL_SPLITS, INITIAL_TARGETS } from './constants';
@@ -89,6 +89,56 @@ async function firebaseRestEmailLinkSignIn(email, oobCode) {
     throw new Error(errorData?.error?.message || `Email link sign-in failed (${response.status})`);
   }
   return response.json();
+}
+
+// REST API for email/password sign-in.
+// signInWithEmailAndPassword can hang on iOS if setPersistence hangs first.
+async function firebaseRestEmailSignIn(email, password) {
+  const apiKey = FIREBASE_CONFIG.apiKey;
+  const response = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, returnSecureToken: true }),
+    }
+  );
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData?.error?.message || `Sign-in failed (${response.status})`);
+  }
+  return response.json();
+}
+
+// REST API for email/password sign-up.
+async function firebaseRestEmailSignUp(email, password) {
+  const apiKey = FIREBASE_CONFIG.apiKey;
+  const response = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, returnSecureToken: true }),
+    }
+  );
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData?.error?.message || `Sign-up failed (${response.status})`);
+  }
+  return response.json();
+}
+
+// Map Firebase REST API error messages to user-friendly messages
+function mapRestAuthError(msg) {
+  const m = (msg || '').toUpperCase();
+  if (m.includes('EMAIL_NOT_FOUND') || m.includes('INVALID_LOGIN_CREDENTIALS')) return 'Invalid email or password';
+  if (m.includes('INVALID_PASSWORD')) return 'Invalid email or password';
+  if (m.includes('EMAIL_EXISTS')) return 'Email already in use';
+  if (m.includes('WEAK_PASSWORD')) return 'Password must be at least 6 characters';
+  if (m.includes('INVALID_EMAIL')) return 'Invalid email address';
+  if (m.includes('TOO_MANY_ATTEMPTS')) return 'Too many attempts. Please wait and try again.';
+  if (m.includes('USER_DISABLED')) return 'This account has been disabled';
+  return msg || 'Authentication failed';
 }
 
 // Inject Firebase user session into localStorage so Firebase picks it up on reload.
@@ -264,30 +314,34 @@ export default function App() {
           debugLog('Firebase init starting');
           console.log('[GhostLog] Firebase init starting');
           setAuthPhase('firebase-init');
-          const app = getApps().length ? getApps()[0] : initializeApp(FIREBASE_CONFIG);
-          const auth = getAuth(app);
-          // Try indexedDB first (works well on iOS 15+ WKWebView), fall back to localStorage
-          debugLog('Setting persistence...');
-          console.log('[GhostLog] Setting persistence...');
-          setAuthPhase('persistence');
-          try {
-            if (CapacitorFallback.isNativePlatform()) {
-              // Native (WKWebView/Android WebView): use localStorage directly.
-              // indexedDB hangs in WKWebView, and the hang corrupts Firebase's internal
-              // state so that all subsequent auth operations (signInWithCredential) also hang.
-              await setPersistence(auth, browserLocalPersistence);
-              debugLog('Persistence: localStorage OK (native)');
-              console.log('[GhostLog] Persistence set OK (localStorage, native)');
-            } else {
-              // Web: indexedDB is reliable and preferred
-              await setPersistence(auth, indexedDBLocalPersistence);
-              debugLog('Persistence: indexedDB OK (web)');
-              console.log('[GhostLog] Persistence set OK (indexedDB, web)');
+
+          // Use initializeAuth instead of getAuth + setPersistence.
+          // setPersistence() hangs indefinitely in WKWebView, blocking ALL subsequent
+          // Firebase auth operations. initializeAuth sets persistence at creation time
+          // without the async migration step that causes the hang.
+          let auth;
+          const existingApp = getApps().length ? getApps()[0] : null;
+          const app = existingApp || initializeApp(FIREBASE_CONFIG);
+
+          if (existingApp) {
+            // Hot reload / already initialized — just get existing auth instance
+            auth = getAuth(existingApp);
+            debugLog('Firebase: reusing existing auth instance');
+          } else {
+            // First init — set persistence at creation time (no hanging migration)
+            try {
+              const persistence = CapacitorFallback.isNativePlatform()
+                ? browserLocalPersistence
+                : indexedDBLocalPersistence;
+              auth = initializeAuth(app, { persistence });
+              debugLog('initializeAuth OK (' + (CapacitorFallback.isNativePlatform() ? 'localStorage' : 'indexedDB') + ')');
+            } catch (initAuthErr) {
+              // initializeAuth throws if called twice — fall back to getAuth
+              debugLog('initializeAuth failed: ' + initAuthErr?.message + ', using getAuth');
+              auth = getAuth(app);
             }
-          } catch (persistErr) {
-            debugLog('Persistence failed: ' + persistErr?.message);
-            console.warn('[GhostLog] setPersistence failed, continuing with default:', persistErr?.message);
           }
+          console.log('[GhostLog] Auth instance ready');
 
           // Handle magic link sign-in (must run after Firebase init)
           if (isSignInWithEmailLink(auth, window.location.href)) {
@@ -360,41 +414,66 @@ export default function App() {
     setAuthLoading(true);
     setAuthPhase(isSignUp ? 'signing-up' : 'signing-in');
     setAuthError(null);
-    // Safety: force stop loading after 10s no matter what
-    const safetyTimer = setTimeout(() => {
-      console.warn('[GhostLog] handleAuth safety timeout hit');
-      setAuthLoading(false);
-      setAuthPhase('auth-timeout');
-    }, 10000);
-    try {
-      const auth = getAuth();
-      let result;
-      if (isSignUp) {
-        result = await createUserWithEmailAndPassword(auth, email, password);
-      } else {
-        result = await signInWithEmailAndPassword(auth, email, password);
+
+    const isNative = CapacitorFallback.isNativePlatform();
+
+    if (isNative) {
+      // NATIVE: Use REST API to completely bypass Firebase SDK auth calls.
+      // signInWithEmailAndPassword can hang in WKWebView if persistence is broken.
+      // REST API uses plain fetch() — zero WKWebView dependencies.
+      debugLog('handleAuth: using REST API (native)');
+      try {
+        const restResult = isSignUp
+          ? await firebaseRestEmailSignUp(email, password)
+          : await firebaseRestEmailSignIn(email, password);
+        debugLog('REST auth success: ' + (restResult.email || restResult.localId));
+        injectFirebaseSession(restResult, 'password');
+        // Reload so Firebase picks up the injected session from localStorage
+        window.location.reload();
+        return;
+      } catch (e) {
+        console.error('[GhostLog] REST auth error:', e?.message);
+        debugLog('REST auth error: ' + e?.message);
+        setAuthError(mapRestAuthError(e?.message));
+        setAuthPhase('error');
+        setAuthLoading(false);
       }
-      clearTimeout(safetyTimer);
-      console.log('[GhostLog] Auth success, user:', result?.user?.email);
-      // Immediately set user — don't rely solely on onAuthStateChanged (can be delayed on iOS)
-      if (result?.user) {
-        setCloudUser(result.user);
-        setCloudStatus('synced');
-        setAuthPhase('authenticated');
-        loadCloudData(result.user.uid);
+    } else {
+      // WEB: Use Firebase SDK directly (works fine outside WKWebView)
+      const safetyTimer = setTimeout(() => {
+        console.warn('[GhostLog] handleAuth safety timeout hit');
+        setAuthLoading(false);
+        setAuthPhase('auth-timeout');
+      }, 10000);
+      try {
+        const auth = getAuth();
+        let result;
+        if (isSignUp) {
+          result = await createUserWithEmailAndPassword(auth, email, password);
+        } else {
+          result = await signInWithEmailAndPassword(auth, email, password);
+        }
+        clearTimeout(safetyTimer);
+        console.log('[GhostLog] Auth success, user:', result?.user?.email);
+        if (result?.user) {
+          setCloudUser(result.user);
+          setCloudStatus('synced');
+          setAuthPhase('authenticated');
+          loadCloudData(result.user.uid);
+        }
+        setAuthLoading(false);
+      } catch (e) {
+        clearTimeout(safetyTimer);
+        console.error('[GhostLog] Auth error:', e?.code, e?.message);
+        const code = e?.code || '';
+        if (code === 'auth/email-already-in-use') setAuthError('Email already in use');
+        else if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') setAuthError('Invalid email or password');
+        else if (code === 'auth/weak-password') setAuthError('Password must be at least 6 characters');
+        else if (code === 'auth/invalid-email') setAuthError('Invalid email address');
+        else setAuthError(e.message);
+        setAuthPhase('error');
+        setAuthLoading(false);
       }
-      setAuthLoading(false);
-    } catch (e) {
-      clearTimeout(safetyTimer);
-      console.error('[GhostLog] Auth error:', e?.code, e?.message);
-      const code = e?.code || '';
-      if (code === 'auth/email-already-in-use') setAuthError('Email already in use');
-      else if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') setAuthError('Invalid email or password');
-      else if (code === 'auth/weak-password') setAuthError('Password must be at least 6 characters');
-      else if (code === 'auth/invalid-email') setAuthError('Invalid email address');
-      else setAuthError(e.message);
-      setAuthPhase('error');
-      setAuthLoading(false);
     }
   };
 
