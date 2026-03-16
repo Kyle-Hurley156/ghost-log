@@ -1,0 +1,80 @@
+name: Submit to Google Play
+
+on:
+  workflow_dispatch:
+    inputs:
+      track:
+        description: 'Google Play track to publish to'
+        required: true
+        default: 'internal'
+        type: choice
+        options:
+          - internal
+          - alpha
+          - beta
+          - production
+      status:
+        description: 'Release status'
+        required: true
+        default: 'completed'
+        type: choice
+        options:
+          - completed
+          - draft
+      run_id:
+        description: 'Build workflow run ID (leave empty for latest successful build)'
+        required: false
+        type: string
+
+jobs:
+  submit_to_play:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate secrets
+        run: |
+          if [ -z "${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}" ]; then
+            echo "::error::GOOGLE_PLAY_SERVICE_ACCOUNT_JSON secret is not configured. See GOOGLE_PLAY_SETUP.md for instructions."
+            exit 1
+          fi
+
+      # Download AAB from the build workflow
+      - name: Download AAB from latest build
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: build-android.yml
+          name: ghostlog-release-aab
+          path: ./aab
+          run_id: ${{ github.event.inputs.run_id || '' }}
+          workflow_conclusion: success
+          if_no_artifact_found: fail
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify AAB exists
+        run: |
+          if [ ! -f ./aab/app-release.aab ]; then
+            echo "::error::AAB file not found. Make sure the build workflow completed successfully with signing."
+            ls -la ./aab/ 2>/dev/null || echo "aab directory does not exist"
+            exit 1
+          fi
+          echo "Found AAB:"
+          ls -lh ./aab/app-release.aab
+
+      - name: Upload to Google Play (${{ github.event.inputs.track }})
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.ghostlog.app
+          releaseFiles: ./aab/app-release.aab
+          track: ${{ github.event.inputs.track }}
+          status: ${{ github.event.inputs.status }}
+          changesNotSentForReview: true
+
+      - name: Summary
+        run: |
+          echo "## Google Play Submission Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Package:** com.ghostlog.app" >> $GITHUB_STEP_SUMMARY
+          echo "- **Track:** ${{ github.event.inputs.track }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** ${{ github.event.inputs.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Source build:** ${{ github.event.inputs.run_id || 'latest successful' }}" >> $GITHUB_STEP_SUMMARY
