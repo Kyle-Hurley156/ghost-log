@@ -14,7 +14,6 @@ import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
 import { FIREBASE_CONFIG, INITIAL_SPLITS, INITIAL_TARGETS } from './constants';
 import { getLocalDate, useStickyState } from './helpers';
 
-import { AuthScreen } from './components/AuthScreen';
 import { OnboardingModal } from './components/OnboardingModal';
 import { SettingsPanel } from './components/SettingsPanel';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -32,7 +31,8 @@ import { TrainTab } from './components/TrainTab';
 import { EatTab } from './components/EatTab';
 import { StatsTab } from './components/StatsTab';
 
-import { DebugOverlay, debugLog } from './components/DebugOverlay';
+// debugLog: no-op in production, keeps call sites intact for future debugging
+const debugLog = () => {};
 
 // --- FALLBACKS FOR WEB PREVIEW ---
 const CapacitorFallback = typeof Capacitor !== 'undefined' ? Capacitor : {
@@ -302,7 +302,7 @@ export default function App() {
     // Safety net: if auth hasn't resolved in 8s, stop waiting
     // (WKWebView can be slow to restore sessions — 4s was too aggressive)
     const authTimeout = setTimeout(() => {
-      console.warn('[GhostLog] Auth timeout — forcing authLoading=false');
+      // console.warn('[GhostLog] Auth timeout — forcing authLoading=false');
       debugLog('AUTH TIMEOUT after 8s');
       setAuthPhase('timeout');
       setAuthLoading(false);
@@ -312,7 +312,7 @@ export default function App() {
       (async () => {
         try {
           debugLog('Firebase init starting');
-          console.log('[GhostLog] Firebase init starting');
+          // console.log('[GhostLog] Firebase init starting');
           setAuthPhase('firebase-init');
 
           // Use initializeAuth instead of getAuth + setPersistence.
@@ -341,7 +341,7 @@ export default function App() {
               auth = getAuth(app);
             }
           }
-          console.log('[GhostLog] Auth instance ready');
+          // console.log('[GhostLog] Auth instance ready');
 
           // Handle magic link sign-in (must run after Firebase init)
           if (isSignInWithEmailLink(auth, window.location.href)) {
@@ -366,11 +366,11 @@ export default function App() {
 
           setAuthPhase('auth-listener');
           debugLog('Registering onAuthStateChanged...');
-          console.log('[GhostLog] Registering onAuthStateChanged...');
+          // console.log('[GhostLog] Registering onAuthStateChanged...');
           const unsubscribe = onAuthStateChanged(auth, async (user) => {
             clearTimeout(authTimeout);
             debugLog('onAuthStateChanged: ' + (user ? user.email : 'null'));
-            console.log('[GhostLog] onAuthStateChanged fired, user:', !!user, user?.email);
+            // console.log('[GhostLog] onAuthStateChanged fired, user:', !!user, user?.email);
             if (user) {
               authResolvedRef.current = true;
               setCloudUser(user);
@@ -410,7 +410,7 @@ export default function App() {
 
   // --- AUTH HANDLERS ---
   const handleAuth = async (email, password, isSignUp) => {
-    console.log('[GhostLog] handleAuth called, isSignUp:', isSignUp);
+    // console.log('[GhostLog] handleAuth called, isSignUp:', isSignUp);
     setAuthLoading(true);
     setAuthPhase(isSignUp ? 'signing-up' : 'signing-in');
     setAuthError(null);
@@ -441,7 +441,7 @@ export default function App() {
     } else {
       // WEB: Use Firebase SDK directly (works fine outside WKWebView)
       const safetyTimer = setTimeout(() => {
-        console.warn('[GhostLog] handleAuth safety timeout hit');
+        // console.warn('[GhostLog] handleAuth safety timeout hit');
         setAuthLoading(false);
         setAuthPhase('auth-timeout');
       }, 10000);
@@ -454,7 +454,7 @@ export default function App() {
           result = await signInWithEmailAndPassword(auth, email, password);
         }
         clearTimeout(safetyTimer);
-        console.log('[GhostLog] Auth success, user:', result?.user?.email);
+        // console.log('[GhostLog] Auth success, user:', result?.user?.email);
         if (result?.user) {
           setCloudUser(result.user);
           setCloudStatus('synced');
@@ -478,7 +478,7 @@ export default function App() {
   };
 
   const handleGoogleSignIn = async () => {
-    console.log('[GhostLog] handleGoogleSignIn called');
+    // console.log('[GhostLog] handleGoogleSignIn called');
     debugLog('handleGoogleSignIn called');
     setAuthLoading(true);
     setAuthPhase('google-auth');
@@ -487,7 +487,7 @@ export default function App() {
     // Stored in ref so deep link handler can clear it on success
     clearTimeout(googleSafetyTimerRef.current);
     googleSafetyTimerRef.current = setTimeout(() => {
-      console.warn('[GhostLog] Google auth safety timeout hit');
+      // console.warn('[GhostLog] Google auth safety timeout hit');
       debugLog('Google auth safety timeout (15s)');
       setAuthLoading(false);
       setAuthPhase('google-timeout');
@@ -508,7 +508,7 @@ export default function App() {
           });
           // result.url = "com.ghostlog.app://google-auth?idToken=<googleIdToken>"
           const callbackUrl = result.url || '';
-          console.log('WebAuth callback:', callbackUrl);
+          // console.log('WebAuth callback:', callbackUrl);
           debugLog('WebAuth callback URL: ' + callbackUrl.substring(0, 100) + '...');
           const qs = callbackUrl.split('?')[1] || '';
           const params = new URLSearchParams(qs);
@@ -530,7 +530,7 @@ export default function App() {
         } catch (pluginErr) {
           // WebAuth plugin not available (e.g. older TestFlight build) — fall back to Browser
           if (String(pluginErr).includes('UNIMPLEMENTED') || String(pluginErr).includes('not implemented')) {
-            console.warn('WebAuth plugin not available, falling back to Browser plugin');
+            // console.warn('WebAuth plugin not available, falling back to Browser plugin');
             debugLog('WebAuth UNIMPLEMENTED, using Browser fallback');
             googleAuthStartedAt.current = Date.now();
             const { Browser } = await import('@capacitor/browser');
@@ -684,7 +684,7 @@ export default function App() {
         } catch (_) {}
 
         deepLinkCleanup = await CapApp.addListener('appUrlOpen', async ({ url }) => {
-          console.log('Deep link received:', url);
+          // console.log('Deep link received:', url);
           debugLog('Deep link: ' + url);
 
           // Handle Google auth deep link (Browser fallback path for Android / iOS without WebAuth)
@@ -729,7 +729,7 @@ export default function App() {
           // Handle password reset deep link from email
           // URL format: com.ghostlog.app://reset-password?oobCode=XXX
           if (url.includes('reset-password')) {
-            console.log('Password reset deep link received');
+            // console.log('Password reset deep link received');
             try {
               const qs = url.split('?')[1] || '';
               const params = new URLSearchParams(qs);
@@ -754,7 +754,7 @@ export default function App() {
           // Uses REST API because signInWithEmailLink internally calls signInWithCredential
           // which hangs in WKWebView.
           if (url.includes('magic-link')) {
-            console.log('Magic link deep link received');
+            // console.log('Magic link deep link received');
             debugLog('Magic link deep link received');
             setAuthLoading(true);
             try {
@@ -984,7 +984,6 @@ export default function App() {
         {showOnboarding && <OnboardingModal onComplete={() => { setShowOnboarding(false); setLogDate(getLocalDate()); setShowDailyCheckin(true); }} setPhase={setPhase} setUserTargets={setUserTargets} userTargets={userTargets} />}
 
         <SettingsPanel show={showSettings} onClose={() => setShowSettings(false)} onLogout={handleLogout} userEmail={cloudUser?.email} requestConfirm={requestConfirm} onAuth={handleAuth} onForgotPassword={handleForgotPassword} authLoading={authLoading} authError={authError} />
-        <DebugOverlay authPhase={authPhase} cloudUser={cloudUser} authLoading={authLoading} authError={authError} />
 
         <DailyCheckinModal isOpen={showDailyCheckin} onClose={()=>setShowDailyCheckin(false)} stats={dailyStatsInput} setStats={setDailyStatsInput} onSave={submitDailyLog} date={logDate} setDate={setLogDate}/>
 

@@ -31,3 +31,12 @@ capacitor.config.json.timestamp
 # Signing keystores
 *.jks
 *.jks.b64
+*.keystore
+.keystore-info
+
+# Test output
+test-results/
+*.playwright-mcp/
+
+# Temporary screenshots
+IMG_*.png

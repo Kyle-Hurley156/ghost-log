@@ -54,7 +54,7 @@ jobs:
         run: |
           cd android/app
           sed -i "s/versionCode 1/versionCode ${{ github.run_number }}/" build.gradle
-          sed -i "s/versionName \"1.0\"/versionName \"1.0.${{ github.run_number }}\"/" build.gradle
+          sed -i "s/versionName \"1.0\"/versionName \"4.1.${{ github.run_number }}\"/" build.gradle
 
       # --- RELEASE SIGNING (if keystore secrets are configured) ---
       - name: Decode Keystore
