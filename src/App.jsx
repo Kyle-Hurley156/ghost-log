@@ -266,10 +266,34 @@ export default function App() {
         if (data.phase) setPhase(data.phase);
         if (data.customExercises) setCustomExercises(data.customExercises);
       }
+      // Only enable sync engine after successful cloud load.
+      // If we set dataLoaded on failure, the sync engine would push stale
+      // localStorage defaults to Firestore — overwriting real user data.
+      setDataLoaded(true);
     } catch (e) {
       console.error("Failed to load cloud data", e);
+      // Retry once after 3s — transient network issues shouldn't cause data loss
+      setTimeout(async () => {
+        try {
+          const snapshot = await getDoc(getUserRef(uid));
+          if (snapshot.exists()) {
+            const data = snapshot.data();
+            if (data.workoutSplits) setWorkoutSplits(data.workoutSplits);
+            if (data.savedMeals) setSavedMeals(data.savedMeals);
+            if (data.statsHistory) setStatsHistory(data.statsHistory);
+            if (data.workoutHistory) setWorkoutHistory(data.workoutHistory);
+            if (data.dailyLog) setDailyLog(data.dailyLog);
+            if (data.userTargets) setUserTargets(data.userTargets);
+            if (data.phase) setPhase(data.phase);
+            if (data.customExercises) setCustomExercises(data.customExercises);
+          }
+          setDataLoaded(true);
+        } catch (retryErr) {
+          console.error("Cloud data retry failed — sync disabled to protect data", retryErr);
+          // Do NOT set dataLoaded — sync engine stays disabled to prevent overwriting
+        }
+      }, 3000);
     }
-    setDataLoaded(true);
   };
 
   // --- INITIALIZATION (FIREBASE & REVENUECAT) ---
@@ -293,7 +317,7 @@ export default function App() {
               try { await PurchasesFallback.logIn({ appUserID: firebaseUid }); } catch (_) {}
             }
             const info = await PurchasesFallback.getCustomerInfo();
-            if (typeof info.entitlements.active['pro'] !== "undefined") setIsPro(true);
+            if (typeof info?.customerInfo?.entitlements?.active['pro'] !== "undefined") setIsPro(true);
           }
         } catch (e) { console.error("RevenueCat Init Error", e); }
       }
@@ -877,7 +901,7 @@ export default function App() {
         // Use .monthly if available, otherwise fall back to first available package
         const pkg = offerings.current.monthly || offerings.current.availablePackages[0];
         const { customerInfo } = await PurchasesFallback.purchasePackage({ aPackage: pkg });
-        if (typeof customerInfo.entitlements.active['pro'] !== "undefined") {
+        if (typeof customerInfo?.entitlements?.active['pro'] !== "undefined") {
           setIsPro(true);
           setShowPaywall(false);
           setToastMsg("Welcome to GhostLog Pro!");
@@ -899,7 +923,7 @@ export default function App() {
     setIsPaywallLoading(true);
     try {
       const info = await PurchasesFallback.restorePurchases();
-      if (typeof info.customerInfo.entitlements.active['pro'] !== "undefined") {
+      if (typeof info?.customerInfo?.entitlements?.active['pro'] !== "undefined") {
         setIsPro(true);
         setShowPaywall(false);
         setToastMsg("Pro restored successfully!");
