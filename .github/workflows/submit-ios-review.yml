@@ -125,29 +125,38 @@ jobs:
           build_number = build_data["data"][0]["attributes"]["version"]
           print(f"Latest build: #{build_number} (ID: {build_id})")
 
-          # --- Step 3: Check for existing version in PREPARE_FOR_SUBMISSION ---
-          print("Checking for version in PREPARE_FOR_SUBMISSION state...")
-          version_data = api_get(f"/apps/{app_id}/appStoreVersions", {
-              "filter[appStoreState]": "PREPARE_FOR_SUBMISSION",
+          # --- Step 3: Find existing version (any editable state) ---
+          # Check all versions for this platform — we need to find one we can work with
+          print("Checking for existing iOS versions...")
+          all_versions = api_get(f"/apps/{app_id}/appStoreVersions", {
               "filter[platform]": "IOS",
-              "fields[appStoreVersions]": "versionString,appStoreState"
+              "fields[appStoreVersions]": "versionString,appStoreState",
+              "limit": "10"
           })
 
           version_id = None
-          if version_data["data"]:
-              version_id = version_data["data"][0]["id"]
-              existing_ver = version_data["data"][0]["attributes"]["versionString"]
-              print(f"Found existing version {existing_ver} in PREPARE_FOR_SUBMISSION (ID: {version_id})")
+          editable_states = ["PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED", "METADATA_REJECTED"]
 
-              # Select build for this version
-              print(f"Selecting build #{build_number} for version {existing_ver}...")
+          # First: look for a version in an editable state
+          for v in all_versions["data"]:
+              state = v["attributes"]["appStoreState"]
+              ver = v["attributes"]["versionString"]
+              print(f"  Found version {ver} in state: {state}")
+              if state in editable_states:
+                  version_id = v["id"]
+                  print(f"  -> Using this version (ID: {version_id})")
+                  break
+
+          if version_id:
+              # Select the latest build for this version
+              print(f"Selecting build #{build_number} for version...")
               api_patch(f"/appStoreVersions/{version_id}/relationships/build", {
                   "data": {"type": "builds", "id": build_id}
               })
               print("Build selected successfully")
           else:
-              # Create new version
-              print(f"Creating new appStoreVersion {version}...")
+              # Try to create a new version
+              print(f"No editable version found. Creating new appStoreVersion {version}...")
               result, status, text = api_post("/appStoreVersions", {
                   "data": {
                       "type": "appStoreVersions",
@@ -159,8 +168,9 @@ jobs:
                   }
               })
               if result is None:
-                  print(f"Failed to create version. This may mean version {version} already exists in another state.")
-                  print(f"Check App Store Connect manually.")
+                  print(f"Failed to create version {version}.")
+                  print("The app likely has a version in a non-editable state (IN_REVIEW, WAITING_FOR_REVIEW, etc).")
+                  print("Wait for that review to complete, or reject it in App Store Connect, then retry.")
                   sys.exit(1)
               version_id = result["data"]["id"]
               print(f"Created appStoreVersion: {version_id}")
