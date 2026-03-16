@@ -43,12 +43,23 @@ jobs:
           import os
           import base64
 
-          key_base64 = os.environ["API_KEY_BASE64"]
+          key_raw = os.environ["API_KEY_BASE64"]
           key_id = os.environ["API_KEY_ID"]
           issuer_id = os.environ["API_ISSUER_ID"]
 
-          # Decode the private key from base64
-          private_key = base64.b64decode(key_base64).decode("utf-8")
+          # The secret may be: (a) raw PEM text, (b) base64-encoded PEM text,
+          # or (c) base64-encoded DER binary. Handle all cases.
+          if key_raw.strip().startswith("-----BEGIN"):
+              # Already PEM text — use directly
+              private_key = key_raw
+          else:
+              decoded = base64.b64decode(key_raw)
+              try:
+                  private_key = decoded.decode("utf-8")
+              except UnicodeDecodeError:
+                  # Binary DER key — PyJWT can handle DER bytes directly
+                  from cryptography.hazmat.primitives.serialization import load_der_private_key
+                  private_key = load_der_private_key(decoded, password=None)
 
           now = int(time.time())
           payload = {
