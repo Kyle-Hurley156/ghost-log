@@ -741,6 +741,13 @@ export default function App() {
   };
 
   const handleSubscribeClick = async () => {
+    // Require sign-in before purchasing Pro
+    if (!cloudUser) {
+      setShowPaywall(false);
+      setToastMsg('Sign in first to subscribe (Settings → Account)');
+      setShowSettings(true);
+      return;
+    }
     setIsPaywallLoading(true);
     if (!CapacitorFallback.isNativePlatform()) {
       setTimeout(() => {
@@ -854,26 +861,7 @@ export default function App() {
   const dailyTotals = dailyLog.reduce((acc, item) => ({ cal: acc.cal + item.totalCals, p: acc.p + item.totalP, c: acc.c + item.totalC, f: acc.f + item.totalF }), { cal: 0, p: 0, c: 0, f: 0 });
   const currentTargets = userTargets[phase] || INITIAL_TARGETS.CUT;
 
-  // Show loading only while checking INITIAL auth state (before we know if user is logged in)
-  if (authLoading && !cloudUser) {
-    return (
-      <div className="bg-black min-h-screen flex flex-col items-center justify-center gap-4">
-        <Loader2 size={32} className="animate-spin accent-text" />
-        <AuthLoadingHelper authPhase={authPhase} />
-        <DebugOverlay authPhase={authPhase} cloudUser={cloudUser} authLoading={authLoading} authError={authError} />
-      </div>
-    );
-  }
-
-  // Show auth screen if not logged in
-  if (!cloudUser) {
-    return (
-      <ErrorBoundary>
-        <AuthScreen onAuth={handleAuth} onGoogle={handleGoogleSignIn} onMagicLink={handleMagicLink} onForgotPassword={handleForgotPassword} onResetConfirm={handleResetConfirm} pendingReset={pendingPasswordReset} onCancelReset={() => setPendingPasswordReset(null)} loading={authLoading} error={authError} />
-        <DebugOverlay authPhase={authPhase} cloudUser={cloudUser} authLoading={authLoading} authError={authError} />
-      </ErrorBoundary>
-    );
-  }
+  // No auth gate — app is always usable. Sign-in is optional (from Settings) for cloud sync.
 
   return (
     <ErrorBoundary>
@@ -883,7 +871,7 @@ export default function App() {
 
         {showOnboarding && <OnboardingModal onComplete={() => { setShowOnboarding(false); setLogDate(getLocalDate()); setShowDailyCheckin(true); }} setPhase={setPhase} setUserTargets={setUserTargets} userTargets={userTargets} />}
 
-        <SettingsPanel show={showSettings} onClose={() => setShowSettings(false)} onLogout={handleLogout} userEmail={cloudUser?.email} requestConfirm={requestConfirm} />
+        <SettingsPanel show={showSettings} onClose={() => setShowSettings(false)} onLogout={handleLogout} userEmail={cloudUser?.email} requestConfirm={requestConfirm} onGoogle={handleGoogleSignIn} onAuth={handleAuth} authLoading={authLoading} authError={authError} />
 
         <DailyCheckinModal isOpen={showDailyCheckin} onClose={()=>setShowDailyCheckin(false)} stats={dailyStatsInput} setStats={setDailyStatsInput} onSave={submitDailyLog} date={logDate} setDate={setLogDate}/>
 
@@ -930,8 +918,8 @@ export default function App() {
               </div>
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-                  {cloudStatus === 'synced' ? <Cloud size={11} className="accent-text"/> : cloudStatus === 'syncing' ? <Loader2 size={11} className="animate-spin text-gray-400"/> : <CloudOff size={11} className="text-red-400"/>}
-                  {cloudStatus === 'synced' ? 'Synced' : cloudStatus === 'syncing' ? 'Syncing...' : 'Local'}
+                  {cloudStatus === 'synced' ? <Cloud size={11} className="accent-text"/> : cloudStatus === 'syncing' ? <Loader2 size={11} className="animate-spin text-gray-400"/> : <CloudOff size={11} className="text-gray-500"/>}
+                  {cloudStatus === 'synced' ? 'Synced' : cloudStatus === 'syncing' ? 'Syncing...' : !cloudUser ? 'Local Only' : 'Local'}
                 </div>
                 {workoutStreak > 0 && (
                   <span className="text-[10px] font-bold text-orange-400 flex items-center gap-0.5 bg-orange-500/10 px-2 py-0.5 rounded-md border border-orange-500/20">
