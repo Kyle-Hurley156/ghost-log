@@ -206,7 +206,23 @@ jobs:
               })
               print("Build selected successfully")
 
-          # --- Step 4: Submit for review ---
+          # --- Step 4: Delete existing submission if present (from prior rejection) ---
+          print("Checking for existing submission to clear...")
+          sub_resp = requests.get(
+              f"{base_url}/appStoreVersions/{version_id}/appStoreVersionSubmission",
+              headers=headers
+          )
+          if sub_resp.status_code == 200:
+              sub_data = sub_resp.json()
+              if sub_data.get("data"):
+                  sub_id = sub_data["data"]["id"]
+                  print(f"  Found existing submission {sub_id} — deleting...")
+                  del_resp = requests.delete(f"{base_url}/appStoreVersionSubmissions/{sub_id}", headers=headers)
+                  print(f"  Delete result: {del_resp.status_code}")
+          elif sub_resp.status_code != 404:
+              print(f"  Submission check returned {sub_resp.status_code} (continuing anyway)")
+
+          # --- Step 5: Submit for review ---
           print(f"Submitting version {version_id} for App Review...")
           result, status, text = api_post("/appStoreVersionSubmissions", {
               "data": {
