@@ -401,8 +401,8 @@ export default function App() {
               setCloudStatus('synced');
               setAuthPhase('authenticated');
               setAuthLoading(false); // Show app immediately — don't wait for data
-              loadCloudData(user.uid); // Load data async in background
-              setupRevenueCat(user.uid);
+              loadCloudData(user.uid).catch(e => console.warn('Cloud data load failed', e));
+              setupRevenueCat(user.uid).catch(e => console.warn('RevenueCat setup failed', e));
             } else {
               setCloudUser(null);
               setCloudStatus('disconnected');
@@ -1044,8 +1044,8 @@ export default function App() {
         <PaywallModal isOpen={showPaywall} onClose={() => setShowPaywall(false)} onSubscribe={handleSubscribeClick} onRestore={handleRestorePurchases} loading={isPaywallLoading}/>
 
         {/* HEADER */}
-        <div className="bg-gray-950 border-b border-gray-800/50 px-4 pb-4 pt-14 fixed top-0 left-0 right-0 z-20 max-w-md mx-auto safe-area-top">
-          <div className="flex justify-between items-start mb-3">
+        <div className="bg-gray-950 border-b border-gray-800/50 px-5 pb-5 pt-14 fixed top-0 left-0 right-0 z-20 max-w-md mx-auto safe-area-top">
+          <div className="flex justify-between items-start mb-4">
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <GhostLogo size={28}/>
@@ -1075,21 +1075,21 @@ export default function App() {
           </div>
 
           {/* STAT DASHBOARD */}
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-4 gap-3 mt-1">
              {activeTab === 'train' && [
                {icon: TrendingUp, val: dailyStatsInput.weight||'-', lbl: 'Weight', col: 'accent-text'},
                {icon: Footprints, val: dailyStatsInput.steps > 1000 ? (dailyStatsInput.steps/1000).toFixed(1)+'k' : (dailyStatsInput.steps||'-'), lbl: 'Steps', col: 'text-gray-300'},
                {icon: BrainCircuit, val: `${dailyStatsInput.stress}/5`, lbl: 'Stress', col: dailyStatsInput.stress>3?'text-red-400':'text-green-400'},
                {icon: Battery, val: `${dailyStatsInput.fatigue}/5`, lbl: 'Fatigue', col: dailyStatsInput.fatigue>3?'text-red-400':'text-green-400'}
-             ].map((s,i) => <div key={i} className="bg-gray-900/80 p-2 rounded-xl text-center border border-gray-800/50"><s.icon size={14} className={`mx-auto mb-1 ${s.col}`}/><p className="text-[9px] text-gray-500 uppercase tracking-wider">{s.lbl}</p><p className="text-white font-bold text-xs">{s.val}</p></div>)}
+             ].map((s,i) => <div key={i} className="bg-gray-900/80 p-3 rounded-xl text-center border border-gray-800/50"><s.icon size={16} className={`mx-auto mb-1.5 ${s.col}`}/><p className="text-[10px] text-gray-500 uppercase tracking-wider">{s.lbl}</p><p className="text-white font-bold text-sm">{s.val}</p></div>)}
 
              {activeTab === 'eat' && [
                {icon: Flame, val: `${dailyTotals.cal}/${currentTargets.cal}`, lbl: 'Cals', col: 'accent-text', over: dailyTotals.cal > currentTargets.cal},
                {icon: Beef, val: `${dailyTotals.p}/${currentTargets.p}`, lbl: 'Prot', col: 'text-red-400', over: false},
                {icon: Wheat, val: `${dailyTotals.c}/${currentTargets.c}`, lbl: 'Carb', col: 'text-orange-400', over: false},
                {icon: Droplet, val: `${dailyTotals.f}/${currentTargets.f}`, lbl: 'Fat', col: 'text-yellow-400', over: false}
-             ].map((s,i) => <div key={i} className={`bg-gray-900/80 p-2 rounded-xl text-center border ${s.over ? 'border-red-500/40' : 'border-gray-800/50'}`}><s.icon size={14} className={`mx-auto mb-1 ${s.col}`}/><p className="text-[9px] text-gray-500 uppercase tracking-wider">{s.lbl}</p><p className="text-white font-bold text-xs">{s.val}</p></div>)}
-             {activeTab === 'stats' && <div className="col-span-4 h-10 flex items-center justify-center"><p className="text-gray-600 text-[10px] uppercase tracking-[0.2em] font-bold">Analytics Dashboard</p></div>}
+             ].map((s,i) => <div key={i} className={`bg-gray-900/80 p-3 rounded-xl text-center border ${s.over ? 'border-red-500/40' : 'border-gray-800/50'}`}><s.icon size={16} className={`mx-auto mb-1.5 ${s.col}`}/><p className="text-[10px] text-gray-500 uppercase tracking-wider">{s.lbl}</p><p className="text-white font-bold text-sm">{s.val}</p></div>)}
+             {activeTab === 'stats' && <div className="col-span-4 h-12 flex items-center justify-center"><p className="text-gray-600 text-xs uppercase tracking-[0.2em] font-bold">Analytics Dashboard</p></div>}
           </div>
         </div>
 
@@ -1103,7 +1103,7 @@ export default function App() {
         </div>
 
         {/* BOTTOM NAV */}
-        <div className="fixed bottom-0 w-full max-w-md bg-gray-950/95 backdrop-blur-xl border-t border-gray-800/50 p-2 pb-8 z-40 safe-area-bottom">
+        <div className="fixed bottom-0 w-full max-w-md bg-gray-950/95 backdrop-blur-xl border-t border-gray-800/50 p-3 pb-9 z-40 safe-area-bottom">
           <div className="flex justify-around items-center">
             {[
               { id: 'train', icon: Dumbbell, label: 'LIFT' },
@@ -1111,10 +1111,10 @@ export default function App() {
               { id: 'stats', icon: BarChart3, label: 'STATS' },
             ].map(tab => (
               <button key={tab.id} onClick={()=>{ setActiveTab(tab.id); hapticSelection(); }}
-                className={`p-2 rounded-xl flex flex-col items-center gap-1 transition-all ${activeTab===tab.id ? 'accent-text' : 'text-gray-600'}`}>
-                <tab.icon size={22} strokeWidth={activeTab===tab.id ? 2.5 : 1.5}/>
-                <span className={`text-[9px] font-bold tracking-wider ${activeTab===tab.id ? '' : 'text-gray-600'}`}>{tab.label}</span>
-                {activeTab===tab.id && <div className="w-1 h-1 rounded-full accent-bg"/>}
+                className={`p-3 rounded-xl flex flex-col items-center gap-1.5 transition-all ${activeTab===tab.id ? 'accent-text' : 'text-gray-600'}`}>
+                <tab.icon size={24} strokeWidth={activeTab===tab.id ? 2.5 : 1.5}/>
+                <span className={`text-[10px] font-bold tracking-wider ${activeTab===tab.id ? '' : 'text-gray-600'}`}>{tab.label}</span>
+                {activeTab===tab.id && <div className="w-1.5 h-1.5 rounded-full accent-bg"/>}
               </button>
             ))}
           </div>

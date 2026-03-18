@@ -77,7 +77,7 @@ export const readTodayHealthData = async () => {
   const platform = Capacitor.getPlatform();
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const result = { steps: null, weight: null, sleep: null };
+  const result = { steps: null, weight: null, sleep: null, activeCalories: null };
 
   if (platform === 'ios') {
     const hk = await getHealthKit();
@@ -127,6 +127,19 @@ export const readTodayHealthData = async () => {
         result.sleep = Math.round(totalMinutes / 60 * 10) / 10;
       }
     } catch (e) { console.warn('Sleep read failed', e); }
+
+    try {
+      // Active calories burned today
+      const cals = await hk.queryHKitSampleType({
+        sampleName: 'HKQuantityTypeIdentifierActiveEnergyBurned',
+        startDate: startOfDay.toISOString(),
+        endDate: now.toISOString(),
+        limit: 0
+      });
+      if (cals?.resultData?.length) {
+        result.activeCalories = Math.round(cals.resultData.reduce((sum, s) => sum + (s.quantity || 0), 0));
+      }
+    } catch (e) { console.warn('Active calories read failed', e); }
   }
 
   if (platform === 'android') {
@@ -181,6 +194,22 @@ export const readTodayHealthData = async () => {
         result.sleep = Math.round(totalMinutes / 60 * 10) / 10;
       }
     } catch (e) { console.warn('Sleep read failed', e); }
+
+    try {
+      // Active calories burned today
+      const cals = await hc.readRecords({
+        type: 'ActiveCaloriesBurned',
+        timeRangeFilter: {
+          type: 'between',
+          startTime: startOfDay.toISOString(),
+          endTime: now.toISOString()
+        }
+      });
+      if (cals?.records?.length) {
+        result.activeCalories = cals.records.reduce((sum, r) => sum + (r.energy?.inKilocalories || 0), 0);
+        result.activeCalories = Math.round(result.activeCalories);
+      }
+    } catch (e) { console.warn('Active calories read failed', e); }
   }
 
   return result;

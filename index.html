@@ -75,9 +75,23 @@
         var loader = document.getElementById('app-loader');
         if (loader) loader.style.display = 'none';
       }
-      window.onerror = function(msg, url, line) { showError(msg + ' (' + url + ':' + line + ')'); };
-      // Hide loader + disable error handlers once React mounts
-      var _rejectionHandler = function(e) { showError('Unhandled: ' + (e.reason && e.reason.message || e.reason)); };
+      // Only show fatal JS errors that prevent the bundle from loading (syntax errors, missing modules)
+      // Non-fatal runtime errors are handled by React's ErrorBoundary
+      window.onerror = function(msg, url, line) {
+        // Suppress non-fatal errors during startup (RevenueCat, Firebase, network)
+        var m = (msg || '').toLowerCase();
+        if (m.indexOf('revenuecat') !== -1 || m.indexOf('firebase') !== -1 || m.indexOf('network') !== -1 || m.indexOf('fetch') !== -1) {
+          console.warn('[GhostLog Startup]', msg);
+          return true; // suppress
+        }
+        showError(msg + ' (' + url + ':' + line + ')');
+      };
+      // Unhandled promise rejections are logged but NOT shown as red error bars
+      // (Firebase/RevenueCat/Health can reject during init without affecting usability)
+      var _rejectionHandler = function(e) {
+        console.warn('[GhostLog] Unhandled rejection:', e.reason && e.reason.message || e.reason);
+        e.preventDefault(); // prevent default browser error logging
+      };
       window.addEventListener('unhandledrejection', _rejectionHandler);
       var _mo = new MutationObserver(function() {
         if (document.getElementById('root').children.length > 0) {
