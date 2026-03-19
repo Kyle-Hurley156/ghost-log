@@ -5,7 +5,8 @@ import {
 } from 'lucide-react';
 
 import { Capacitor } from '@capacitor/core';
-import { Purchases } from '@revenuecat/purchases-capacitor';
+// RevenueCat is imported dynamically inside setupRevenueCat() to prevent
+// module-level crashes on iOS (native plugin bridge may not be available).
 
 import { initializeApp, getApps } from 'firebase/app';
 import { initializeAuth, getAuth, browserLocalPersistence, indexedDBLocalPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithCredential, signInWithPopup, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, sendPasswordResetEmail, verifyPasswordResetCode, confirmPasswordReset } from 'firebase/auth';
@@ -40,12 +41,25 @@ const CapacitorFallback = typeof Capacitor !== 'undefined' ? Capacitor : {
   getPlatform: () => 'web'
 };
 
-const PurchasesFallback = typeof Purchases !== 'undefined' ? Purchases : {
+// PurchasesFallback used when dynamic import of RevenueCat fails or on web
+const PurchasesFallback = {
   configure: () => {},
   getCustomerInfo: async () => ({ entitlements: { active: {} } }),
   getOfferings: async () => ({ current: null }),
-  purchasePackage: async () => ({ customerInfo: { entitlements: { active: {} } } })
+  purchasePackage: async () => ({ customerInfo: { entitlements: { active: {} } } }),
+  restorePurchases: async () => ({ customerInfo: { entitlements: { active: {} } } }),
+  logIn: async () => {}
 };
+
+// Lazily load RevenueCat native plugin; returns fallback on failure
+async function getRevenueCat() {
+  try {
+    const { Purchases } = await import('@revenuecat/purchases-capacitor');
+    return Purchases || PurchasesFallback;
+  } catch (_) {
+    return PurchasesFallback;
+  }
+}
 
 // --- FIREBASE REST API GOOGLE SIGN-IN ---
 // Bypasses signInWithCredential which hangs indefinitely in WKWebView.
@@ -308,15 +322,16 @@ export default function App() {
     const setupRevenueCat = async (firebaseUid) => {
       if (CapacitorFallback.isNativePlatform()) {
         try {
+          const RC = await getRevenueCat();
           const platform = CapacitorFallback.getPlatform();
           const rcKey = platform === 'ios' ? import.meta.env?.VITE_RC_APPLE_KEY : import.meta.env?.VITE_RC_GOOGLE_KEY;
           if (rcKey) {
-            await PurchasesFallback.configure({ apiKey: rcKey });
+            await RC.configure({ apiKey: rcKey });
             // Link RevenueCat to Firebase UID so purchases follow the user across devices
             if (firebaseUid) {
-              try { await PurchasesFallback.logIn({ appUserID: firebaseUid }); } catch (_) {}
+              try { await RC.logIn({ appUserID: firebaseUid }); } catch (_) {}
             }
-            const info = await PurchasesFallback.getCustomerInfo();
+            const info = await RC.getCustomerInfo();
             if (typeof info?.customerInfo?.entitlements?.active['pro'] !== "undefined") setIsPro(true);
           }
         } catch (e) { console.error("RevenueCat Init Error", e); }
@@ -896,11 +911,12 @@ export default function App() {
     }
 
     try {
-      const offerings = await PurchasesFallback.getOfferings();
+      const RC = await getRevenueCat();
+      const offerings = await RC.getOfferings();
       if (offerings.current !== null && offerings.current.availablePackages.length !== 0) {
         // Use .monthly if available, otherwise fall back to first available package
         const pkg = offerings.current.monthly || offerings.current.availablePackages[0];
-        const { customerInfo } = await PurchasesFallback.purchasePackage({ aPackage: pkg });
+        const { customerInfo } = await RC.purchasePackage({ aPackage: pkg });
         if (typeof customerInfo?.entitlements?.active['pro'] !== "undefined") {
           setIsPro(true);
           setShowPaywall(false);
@@ -922,7 +938,8 @@ export default function App() {
     }
     setIsPaywallLoading(true);
     try {
-      const info = await PurchasesFallback.restorePurchases();
+      const RC = await getRevenueCat();
+      const info = await RC.restorePurchases();
       if (typeof info?.customerInfo?.entitlements?.active['pro'] !== "undefined") {
         setIsPro(true);
         setShowPaywall(false);
@@ -1001,7 +1018,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="bg-black min-h-screen text-gray-100 font-sans max-w-md mx-auto relative shadow-2xl overflow-hidden border-x border-gray-800/50 pt-16">
+      <div className="bg-black min-h-screen text-gray-100 font-sans relative overflow-hidden pt-16">
         {toastMsg && <Toast message={toastMsg} onClose={() => setToastMsg(null)} />}
         <ConfirmModal isOpen={confirmState.isOpen} message={confirmState.message} onConfirm={confirmState.onConfirm} onCancel={() => setConfirmState({isOpen:false, message:'', onConfirm:null})} />
 
@@ -1044,7 +1061,7 @@ export default function App() {
         <PaywallModal isOpen={showPaywall} onClose={() => setShowPaywall(false)} onSubscribe={handleSubscribeClick} onRestore={handleRestorePurchases} loading={isPaywallLoading}/>
 
         {/* HEADER */}
-        <div className="bg-gray-950 border-b border-gray-800/50 px-5 pb-5 pt-14 fixed top-0 left-0 right-0 z-20 max-w-md mx-auto safe-area-top">
+        <div className="bg-gray-950 border-b border-gray-800/50 px-5 pb-5 pt-14 fixed top-0 left-0 right-0 z-20 safe-area-top">
           <div className="flex justify-between items-start mb-4">
             <div>
               <div className="flex items-center gap-2 mb-1">
@@ -1103,7 +1120,7 @@ export default function App() {
         </div>
 
         {/* BOTTOM NAV */}
-        <div className="fixed bottom-0 w-full max-w-md bg-gray-950/95 backdrop-blur-xl border-t border-gray-800/50 p-3 pb-9 z-40 safe-area-bottom">
+        <div className="fixed bottom-0 w-full bg-gray-950/95 backdrop-blur-xl border-t border-gray-800/50 p-3 pb-9 z-40 safe-area-bottom">
           <div className="flex justify-around items-center">
             {[
               { id: 'train', icon: Dumbbell, label: 'LIFT' },

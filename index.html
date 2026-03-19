@@ -80,7 +80,7 @@
       window.onerror = function(msg, url, line) {
         // Suppress non-fatal errors during startup (RevenueCat, Firebase, network)
         var m = (msg || '').toLowerCase();
-        if (m.indexOf('revenuecat') !== -1 || m.indexOf('firebase') !== -1 || m.indexOf('network') !== -1 || m.indexOf('fetch') !== -1) {
+        if (m.indexOf('revenuecat') !== -1 || m.indexOf('firebase') !== -1 || m.indexOf('network') !== -1 || m.indexOf('fetch') !== -1 || m.indexOf('module') !== -1 || m.indexOf('dynamically imported') !== -1) {
           console.warn('[GhostLog Startup]', msg);
           return true; // suppress
         }

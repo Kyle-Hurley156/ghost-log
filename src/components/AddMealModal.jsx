@@ -230,7 +230,7 @@ export const AddMealModal = ({ isOpen, onClose, onSave, setToast, aiCooldown, se
 
   return (
     <div className="fixed inset-0 bg-black/95 z-50 flex flex-col animate-in fade-in safe-area-top safe-area-bottom">
-      <div className="bg-gray-900 w-full max-w-md mx-auto flex flex-col flex-1">
+      <div className="bg-gray-900 w-full mx-auto flex flex-col flex-1">
 
         {/* Header */}
         <div className="flex justify-between items-center px-4 pt-14 pb-2 shrink-0">
