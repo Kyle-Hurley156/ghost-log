@@ -16,7 +16,8 @@ fi
 
 echo "🚀 Launching $AVD_NAME emulator..."
 # Launch emulator in background (detached from terminal)
-cmd.exe /c "start /b $ANDROID_SDK\\emulator\\emulator.exe -avd $AVD_NAME -no-snapshot-load" 2>/dev/null &
+WIN_EMULATOR=$(wslpath -w "$EMULATOR")
+cmd.exe /c "start /b $WIN_EMULATOR -avd $AVD_NAME -no-snapshot-load -no-audio -gpu host" 2>/dev/null &
 
 echo "⏳ Waiting for emulator to boot..."
 MAX_WAIT=120

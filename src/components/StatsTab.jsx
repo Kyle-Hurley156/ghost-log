@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Edit3, Loader2, Lock, Dumbbell, HeartPulse, Sparkles, Download } from 'lucide-react';
+import { Edit3, Loader2, Lock, Dumbbell, HeartPulse, Sparkles, Download, TrendingUp } from 'lucide-react';
 import { API_URL } from '../constants';
 import { getLocalDate } from '../helpers';
 
@@ -9,6 +9,7 @@ export const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workou
   const [focusedStatEntry, setFocusedStatEntry] = useState(null);
   const [ghostReport, setGhostReport] = useState(null);
   const [loadingReport, setLoadingReport] = useState(false);
+  const [selectedLift, setSelectedLift] = useState(null);
 
   const filteredHistory = useMemo(() => {
     const cutoff = new Date();
@@ -19,6 +20,39 @@ export const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workou
   const recentActivity = useMemo(() => {
     return [...workoutHistory].reverse().slice(0, 5);
   }, [workoutHistory]);
+
+  // Compute strength progress: best weight per exercise per session
+  const strengthData = useMemo(() => {
+    const exerciseMap = {};
+    workoutHistory.forEach(session => {
+      if (session.type === 'cardio' || !session.exercises) return;
+      session.exercises.forEach(ex => {
+        const maxW = Math.max(0, ...(ex.sets || []).map(s => parseFloat(s.weight) || 0));
+        if (maxW > 0) {
+          if (!exerciseMap[ex.name]) exerciseMap[ex.name] = [];
+          exerciseMap[ex.name].push({ date: session.date, weight: maxW });
+        }
+      });
+    });
+    // Sort each exercise's data by date and return top 8 most-trained exercises
+    const entries = Object.entries(exerciseMap)
+      .map(([name, data]) => ({ name, data: data.sort((a, b) => a.date.localeCompare(b.date)) }))
+      .filter(e => e.data.length >= 2)
+      .sort((a, b) => b.data.length - a.data.length)
+      .slice(0, 8);
+    return entries;
+  }, [workoutHistory]);
+
+  // Auto-select first lift when switching to strength view
+  const currentLiftData = useMemo(() => {
+    if (localStat !== 'strength') return null;
+    const lift = strengthData.find(e => e.name === selectedLift) || strengthData[0];
+    if (!lift) return null;
+    // Apply time range filter
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - (timeRange === '1W' ? 7 : timeRange === '1M' ? 30 : 90));
+    return { name: lift.name, data: lift.data.filter(d => new Date(d.date) >= cutoff) };
+  }, [localStat, selectedLift, strengthData, timeRange]);
 
   const generateGhostReport = async () => {
     if (aiCooldown > 0) { setToast(`Ghost is resting for ${aiCooldown}s`); return; }
@@ -127,10 +161,10 @@ export const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workou
        {/* Stat pills + time range */}
        <div className="space-y-2 mb-4">
          <div className="flex gap-1.5 overflow-x-auto pb-1">
-           {['Weight', 'Energy', 'Sleep', 'Stress', 'Water', 'Steps', 'Cardio'].map(stat => (
-             <button key={stat} onClick={() => {setLocalStat(stat === 'Energy' ? 'cals' : stat.toLowerCase()); setFocusedStatEntry(null);}}
+           {['Weight', 'Energy', 'Sleep', 'Stress', 'Water', 'Steps', 'Cardio', 'Strength'].map(stat => (
+             <button key={stat} onClick={() => {setLocalStat(stat === 'Energy' ? 'cals' : stat.toLowerCase()); setFocusedStatEntry(null); if (stat === 'Strength' && strengthData.length > 0 && !selectedLift) setSelectedLift(strengthData[0].name);}}
                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold whitespace-nowrap border transition-all ${localStat === (stat === 'Energy' ? 'cals' : stat.toLowerCase()) ? 'accent-bg text-white border-transparent' : 'bg-gray-900/50 text-gray-500 border-gray-800/50'}`}>
-               {stat}
+               {stat === 'Strength' && <TrendingUp size={10} className="inline mr-1"/>}{stat}
              </button>
            ))}
          </div>
@@ -139,11 +173,50 @@ export const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workou
          </div>
        </div>
 
+       {/* Lift selector for strength view */}
+       {localStat === 'strength' && strengthData.length > 0 && (
+         <div className="flex gap-1.5 overflow-x-auto pb-2 mb-2">
+           {strengthData.map(ex => (
+             <button key={ex.name} onClick={() => setSelectedLift(ex.name)}
+               className={`px-2.5 py-1 rounded-lg text-[9px] font-bold whitespace-nowrap border transition-all ${selectedLift === ex.name ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 'bg-gray-900/50 text-gray-600 border-gray-800/50'}`}>
+               {ex.name}
+             </button>
+           ))}
+         </div>
+       )}
+
        {/* Chart */}
        <div className="bg-gray-900/50 p-4 rounded-xl border border-gray-800/50 min-h-[200px] relative mb-8">
-          <div className="flex justify-between mb-6"><h3 className="text-white font-bold text-sm capitalize">{localStat === 'cals' ? 'Energy Intake' : localStat} Trend</h3></div>
+          <div className="flex justify-between mb-6"><h3 className="text-white font-bold text-sm capitalize">{localStat === 'cals' ? 'Energy Intake' : localStat === 'strength' ? (currentLiftData?.name || 'Strength') + ' PR' : localStat} Trend</h3></div>
           <div className="absolute inset-0 top-16 bottom-8 left-4 right-4 flex items-end justify-between">
-             {filteredHistory.length === 0 ? (
+             {localStat === 'strength' ? (
+               !currentLiftData || currentLiftData.data.length === 0 ? (
+                 <div className="text-center w-full self-center">
+                   <TrendingUp size={20} className="mx-auto mb-2 text-gray-700"/>
+                   <p className="text-gray-600 text-xs">{strengthData.length === 0 ? 'Complete 2+ workouts with the same exercise to see trends' : 'No data in this time range'}</p>
+                 </div>
+               ) : (() => {
+                 const liftData = currentLiftData.data;
+                 const liftMax = Math.max(...liftData.map(d => d.weight));
+                 const liftMin = Math.min(...liftData.map(d => d.weight));
+                 const liftRange = liftMax - liftMin || 1;
+                 const liftPoints = liftData.map((d, i) => {
+                   const x = (i / (liftData.length - 1 || 1)) * 100;
+                   const y = 100 - ((d.weight - liftMin) / liftRange) * 80 - 10;
+                   return `${x},${y}`;
+                 }).join(' ');
+                 return (
+                   <svg className="w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
+                     <polyline fill="none" stroke="#eab308" strokeWidth="2" points={liftPoints} vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round"/>
+                     {liftData.map((d, i) => {
+                       const x = (i / (liftData.length - 1 || 1)) * 100;
+                       const y = 100 - ((d.weight - liftMin) / liftRange) * 80 - 10;
+                       return <circle key={i} cx={x} cy={y} r="6" fill="#eab308" stroke="black" strokeWidth="2" className="cursor-pointer" onClick={() => setFocusedStatEntry({ date: d.date, liftWeight: d.weight, liftName: currentLiftData.name })} />;
+                     })}
+                   </svg>
+                 );
+               })()
+             ) : filteredHistory.length === 0 ? (
                <div className="text-center w-full self-center">
                  <Edit3 size={20} className="mx-auto mb-2 text-gray-700"/>
                  <p className="text-gray-600 text-xs">No data yet</p>
@@ -162,9 +235,11 @@ export const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workou
              )}
           </div>
           {focusedStatEntry && (
-            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gray-950 border border-gray-700 p-4 rounded-xl shadow-2xl text-center z-20 animate-in fade-in zoom-in-95 w-40">
+            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gray-950 border border-gray-700 p-4 rounded-xl shadow-2xl text-center z-20 animate-in fade-in zoom-in-95 w-44">
                <p className="text-[10px] text-gray-500 font-bold uppercase mb-1">{focusedStatEntry.date}</p>
-               {localStat === 'cardio' ? (
+               {focusedStatEntry.liftWeight ? (
+                 <><p className="text-2xl font-black text-white">{focusedStatEntry.liftWeight} <span className="text-xs text-yellow-400 font-normal">kg</span></p><p className="text-[10px] text-gray-500 font-medium">{focusedStatEntry.liftName}</p></>
+               ) : localStat === 'cardio' ? (
                  <><p className="text-xl font-black text-white">{focusedStatEntry.cardioCalories || 0} <span className="text-xs text-orange-400 font-normal">kcal</span></p><p className="text-xs text-gray-500 font-bold">{focusedStatEntry.cardio || 0} min</p></>
                ) : (
                  <p className="text-2xl font-black text-white">{focusedStatEntry[localStat] || 0} <span className="text-xs accent-text font-normal">{localStat === 'cals' ? 'kcal' : localStat}</span></p>

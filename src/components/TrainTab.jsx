@@ -1,21 +1,49 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Check, X, Edit3, Trash2, GripVertical, Sparkles, AlertTriangle, Activity, HeartPulse, Dumbbell } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Plus, Check, X, Edit3, Trash2, GripVertical, Sparkles, AlertTriangle, Activity, HeartPulse, Dumbbell, Timer, RotateCcw } from 'lucide-react';
 import { calculateReadiness, calculateSetTarget, getLocalDate } from '../helpers';
 import { ExerciseSearchInput } from './ExerciseSearchInput';
-import { hapticLight, hapticSuccess } from '../services/haptics';
+import { hapticLight, hapticSuccess, hapticMedium } from '../services/haptics';
 
 export const TrainTab = ({
   workoutSplits, setWorkoutSplits, workoutHistory, setWorkoutHistory,
   workoutEditMode, setWorkoutEditMode, addSplit, deleteSplit, renameSplit, handleSortSplits,
-  dragItem, dragOverItem, phase, dailyStats, requestConfirm, setShowCardioModal,
+  dragItem, dragOverItem, phase, dailyStats, requestConfirm, requestPrompt, setShowCardioModal,
   customExercises, onCreateExercise
 }) => {
   const [mode, setMode] = useState('SPLIT_SELECT');
   const [activeSession, setActiveSession] = useState(null);
   const [editingSplit, setEditingSplit] = useState(null);
   const [readinessScore, setReadinessScore] = useState(50);
+  const [restTime, setRestTime] = useState(90);
+  const [restRemaining, setRestRemaining] = useState(0);
+  const [workoutElapsed, setWorkoutElapsed] = useState(0);
+  const workoutStartRef = useRef(null);
+  const restTimerRef = useRef(null);
 
   useEffect(() => setReadinessScore(calculateReadiness(dailyStats)), [dailyStats]);
+
+  // Workout elapsed timer
+  useEffect(() => {
+    if (mode !== 'ACTIVE_SESSION') { workoutStartRef.current = null; return; }
+    if (!workoutStartRef.current) workoutStartRef.current = Date.now();
+    const iv = setInterval(() => setWorkoutElapsed(Math.floor((Date.now() - workoutStartRef.current) / 1000)), 1000);
+    return () => clearInterval(iv);
+  }, [mode]);
+
+  // Rest countdown timer
+  useEffect(() => {
+    if (restRemaining <= 0) { clearInterval(restTimerRef.current); return; }
+    restTimerRef.current = setInterval(() => {
+      setRestRemaining(prev => {
+        if (prev <= 1) { hapticMedium(); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(restTimerRef.current);
+  }, [restRemaining]);
+
+  const startRest = useCallback(() => setRestRemaining(restTime), [restTime]);
+  const formatTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
   const getLastSets = (name) => {
     for (let i = workoutHistory.length - 1; i >= 0; i--) {
@@ -73,13 +101,13 @@ export const TrainTab = ({
        });
        setWorkoutSplits(updatedSplits);
     } else {
-      if(window.confirm("Save as new template?")) {
-        const name = window.prompt("Workout Name:");
-        if(name) {
-          const newSplit = { id: `s-${Date.now()}`, name, exercises: activeSession.exercises.map(e => ({ id: Date.now(), name: e.name, defaultSets: e.sets.length })) };
-          setWorkoutSplits([...workoutSplits, newSplit]);
-        }
-      }
+      const sessionExercises = activeSession.exercises;
+      requestConfirm("Save as new template?", () => {
+        requestPrompt("Workout name:", '', (name) => {
+          const newSplit = { id: `s-${Date.now()}`, name, exercises: sessionExercises.map(e => ({ id: Date.now() + Math.random(), name: e.name, defaultSets: e.sets.length })) };
+          setWorkoutSplits(prev => [...prev, newSplit]);
+        });
+      });
     }
     setActiveSession(null); setMode('SPLIT_SELECT');
     hapticSuccess();
@@ -88,7 +116,7 @@ export const TrainTab = ({
   const cancelSession = () => { requestConfirm("Quit workout?", () => { setActiveSession(null); setMode('SPLIT_SELECT'); }); };
   const removeExerciseFromSession = (exIndex) => { requestConfirm("Remove exercise?", () => { const newExs = [...activeSession.exercises]; newExs.splice(exIndex, 1); setActiveSession({ ...activeSession, exercises: newExs }); }); };
   const updateSet = (exIdx, setIdx, field, value) => { const n = [...activeSession.exercises]; n[exIdx].sets[setIdx][field] = value; setActiveSession({...activeSession, exercises: n}); };
-  const toggleSetComplete = (exIdx, setIdx) => { const n = [...activeSession.exercises]; n[exIdx].sets[setIdx].done = !n[exIdx].sets[setIdx].done; setActiveSession({...activeSession, exercises: n}); if (n[exIdx].sets[setIdx].done) hapticLight(); };
+  const toggleSetComplete = (exIdx, setIdx) => { const n = [...activeSession.exercises]; n[exIdx].sets[setIdx].done = !n[exIdx].sets[setIdx].done; setActiveSession({...activeSession, exercises: n}); if (n[exIdx].sets[setIdx].done) { hapticLight(); startRest(); } };
   const addSet = (exIdx) => { const n = [...activeSession.exercises]; n[exIdx].sets.push({weight:'',reps:'',done:false,target:{}}); setActiveSession({...activeSession, exercises: n}); };
   const removeSet = (exIdx, setIdx) => { const n = [...activeSession.exercises]; n[exIdx].sets.splice(setIdx, 1); setActiveSession({...activeSession, exercises: n}); };
 
@@ -97,7 +125,7 @@ export const TrainTab = ({
   const addExerciseToTemplate = (name) => { if(!name) return; setEditingSplit(prev => ({ ...prev, exercises: [...prev.exercises, { id: Date.now(), name, defaultSets: 3 }] })); };
   const handleSortTemplateExercises = () => { let exs = [...editingSplit.exercises]; const dragged = exs.splice(dragItem.current, 1)[0]; exs.splice(dragOverItem.current, 0, dragged); dragItem.current = null; dragOverItem.current = null; setEditingSplit({ ...editingSplit, exercises: exs }); };
   const deleteExerciseFromTemplate = (idx) => { requestConfirm("Delete exercise?", () => { const newExs = [...editingSplit.exercises]; newExs.splice(idx, 1); setEditingSplit({...editingSplit, exercises: newExs}); }); };
-  const handleRenameSplit = (id, currentName) => { const newName = window.prompt("Rename:", currentName); if(newName) setWorkoutSplits(workoutSplits.map(s => s.id === id ? { ...s, name: newName } : s)); };
+  const handleRenameSplit = (id, currentName) => { requestPrompt("Rename split:", currentName, (newName) => setWorkoutSplits(workoutSplits.map(s => s.id === id ? { ...s, name: newName } : s))); };
 
   if (mode === 'SPLIT_SELECT') {
     return (
@@ -160,6 +188,34 @@ export const TrainTab = ({
       <div className={`p-3 rounded-xl border flex items-center gap-3 mb-4 ${readinessScore > 80 ? 'bg-green-900/20 border-green-500/30' : readinessScore < 40 ? 'bg-red-900/20 border-red-500/30' : 'bg-gray-900/50 border-gray-800/50'}`}>
          {readinessScore > 80 ? <Sparkles className="text-green-400" size={18}/> : readinessScore < 40 ? <AlertTriangle className="text-red-400" size={18}/> : <Activity className="text-gray-500" size={18}/>}
          <div><p className="text-xs font-bold text-white uppercase tracking-wide">{readinessScore > 80 ? "System Prime" : readinessScore < 40 ? "High Fatigue" : "Normal Readiness"}</p><p className="text-[10px] text-gray-500">{readinessScore > 80 ? "Targets increased." : readinessScore < 40 ? "Ghost lowered targets." : "Standard progression."}</p></div>
+      </div>
+
+      {/* Rest Timer + Workout Clock */}
+      <div className="flex gap-2 mb-4">
+        <div className={`flex-1 rounded-xl p-3 border flex items-center justify-between ${restRemaining > 0 ? 'bg-blue-900/20 border-blue-500/30' : 'bg-gray-900/50 border-gray-800/50'}`}>
+          <div className="flex items-center gap-2">
+            <Timer size={14} className={restRemaining > 0 ? 'text-blue-400' : 'text-gray-600'}/>
+            <span className="text-[10px] text-gray-500 uppercase font-bold">Rest</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {restRemaining > 0 ? (
+              <span className="text-lg font-black text-blue-400 tabular-nums">{formatTime(restRemaining)}</span>
+            ) : (
+              <span className="text-xs text-gray-600 font-bold">Ready</span>
+            )}
+            {restRemaining > 0 && <button onClick={() => setRestRemaining(0)} className="text-gray-600 hover:text-white p-0.5"><X size={12}/></button>}
+          </div>
+        </div>
+        <div className="bg-gray-900/50 border border-gray-800/50 rounded-xl px-3 py-2 flex flex-col items-center justify-center">
+          <span className="text-[8px] text-gray-600 uppercase font-bold">Time</span>
+          <span className="text-xs font-bold text-white tabular-nums">{formatTime(workoutElapsed)}</span>
+        </div>
+      </div>
+      {/* Rest time adjuster */}
+      <div className="flex items-center justify-center gap-3 mb-4">
+        {[60, 90, 120, 180].map(t => (
+          <button key={t} onClick={() => setRestTime(t)} className={`text-[9px] font-bold px-2 py-1 rounded-lg border transition-all ${restTime === t ? 'accent-bg text-white border-transparent' : 'bg-gray-900/50 text-gray-600 border-gray-800/50'}`}>{t}s</button>
+        ))}
       </div>
 
       <div className="flex justify-between items-center border-b border-gray-800/50 pb-4 mb-4">
