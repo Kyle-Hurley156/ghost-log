@@ -1,0 +1,271 @@
+name: iOS Simulator Test
+
+on:
+  # Run on demand — don't burn minutes on every push
+  workflow_dispatch:
+    inputs:
+      device:
+        description: 'Simulator device name'
+        required: false
+        default: 'iPhone 16'
+      capture_video:
+        description: 'Record 15s video of app launch'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  ios_simulator_test:
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      # ─── Checkout & Setup ──────────────────────────────────────
+      - name: Checkout Source
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Select latest stable Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Install Dependencies
+        run: |
+          npm install --legacy-peer-deps
+          npm install @capacitor/ios@^6.2.1 --legacy-peer-deps
+
+      # ─── Secrets / Env ─────────────────────────────────────────
+      - name: Create .env file
+        run: |
+          echo "VITE_GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
+          echo "VITE_FIREBASE_API_KEY=${{ secrets.FIREBASE_API_KEY }}" >> .env
+          echo "VITE_FIREBASE_AUTH_DOMAIN=${{ secrets.FIREBASE_AUTH_DOMAIN }}" >> .env
+          echo "VITE_FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }}" >> .env
+          echo "VITE_FIREBASE_STORAGE_BUCKET=${{ secrets.FIREBASE_STORAGE_BUCKET }}" >> .env
+          echo "VITE_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}" >> .env
+          echo "VITE_FIREBASE_APP_ID=${{ secrets.FIREBASE_APP_ID }}" >> .env
+          echo "VITE_RC_APPLE_KEY=${{ secrets.RC_APPLE_KEY }}" >> .env
+
+      # ─── Build for Simulator ───────────────────────────────────
+      - name: Build Web Assets
+        run: npm run build
+
+      - name: Sync Capacitor iOS
+        run: npx cap sync ios
+
+      - name: Configure iOS Settings
+        run: |
+          cd ios/App/App
+          # Version info
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 4.0" Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ github.run_number }}" Info.plist
+          /usr/libexec/PlistBuddy -c "Set :ITSAppUsesNonExemptEncryption false" Info.plist
+          # Camera permission
+          /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string 'GhostLog uses your camera to scan food labels and meals for macro tracking.'" Info.plist 2>/dev/null || \
+          /usr/libexec/PlistBuddy -c "Set :NSCameraUsageDescription 'GhostLog uses your camera to scan food labels and meals for macro tracking.'" Info.plist
+          # HealthKit permissions
+          /usr/libexec/PlistBuddy -c "Add :NSHealthShareUsageDescription string 'GhostLog reads steps, weight and sleep from Apple Health to auto-fill your daily log.'" Info.plist 2>/dev/null || \
+          /usr/libexec/PlistBuddy -c "Set :NSHealthShareUsageDescription 'GhostLog reads steps, weight and sleep from Apple Health to auto-fill your daily log.'" Info.plist
+          /usr/libexec/PlistBuddy -c "Add :NSHealthUpdateUsageDescription string 'GhostLog can write workout data to Apple Health.'" Info.plist 2>/dev/null || \
+          /usr/libexec/PlistBuddy -c "Set :NSHealthUpdateUsageDescription 'GhostLog can write workout data to Apple Health.'" Info.plist
+
+      - name: List Available Simulators
+        run: xcrun simctl list devices available
+
+      - name: Boot Simulator
+        run: |
+          DEVICE_NAME="${{ github.event.inputs.device || 'iPhone 16' }}"
+          echo "Looking for device: $DEVICE_NAME"
+
+          # Find the device UDID (pick latest runtime)
+          DEVICE_UDID=$(xcrun simctl list devices available -j | \
+            python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          target = '$DEVICE_NAME'
+          # Iterate runtimes in reverse so we get the latest iOS version
+          for runtime in sorted(data['devices'].keys(), reverse=True):
+              if 'iOS' not in runtime:
+                  continue
+              for dev in data['devices'][runtime]:
+                  if dev['name'] == target and dev['isAvailable']:
+                      print(dev['udid'])
+                      sys.exit(0)
+          sys.exit(1)
+          ")
+
+          if [ -z "$DEVICE_UDID" ]; then
+            echo "::error::Could not find simulator: $DEVICE_NAME"
+            echo "Available devices:"
+            xcrun simctl list devices available
+            exit 1
+          fi
+
+          echo "Booting $DEVICE_NAME ($DEVICE_UDID)"
+          xcrun simctl boot "$DEVICE_UDID"
+          echo "DEVICE_UDID=$DEVICE_UDID" >> $GITHUB_ENV
+          echo "DEVICE_NAME=$DEVICE_NAME" >> $GITHUB_ENV
+
+      - name: Build for Simulator
+        run: |
+          cd ios/App
+          xcodebuild build \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            -destination "id=${{ env.DEVICE_UDID }}" \
+            -derivedDataPath $RUNNER_TEMP/DerivedData \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee $RUNNER_TEMP/xcodebuild.log | tail -20
+
+      - name: Verify .app Bundle
+        run: |
+          APP_PATH=$(find $RUNNER_TEMP/DerivedData -name "App.app" -type d | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "::error::.app bundle not found in DerivedData"
+            exit 1
+          fi
+          echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
+          echo "Found app at: $APP_PATH"
+          ls -la "$APP_PATH"
+
+      # ─── Install & Launch ──────────────────────────────────────
+      - name: Install App on Simulator
+        run: |
+          xcrun simctl install "${{ env.DEVICE_UDID }}" "${{ env.APP_PATH }}"
+          echo "App installed successfully"
+
+      - name: Launch App
+        run: |
+          # Start collecting logs in background before launch
+          xcrun simctl spawn "${{ env.DEVICE_UDID }}" log stream \
+            --level debug \
+            --predicate 'subsystem CONTAINS "com.ghostlog" OR processImagePath CONTAINS "App"' \
+            > $RUNNER_TEMP/simulator.log 2>&1 &
+          LOG_PID=$!
+          echo "LOG_PID=$LOG_PID" >> $GITHUB_ENV
+
+          # Launch the app
+          xcrun simctl launch "${{ env.DEVICE_UDID }}" com.ghostlog.app
+          echo "App launched. Waiting for it to load..."
+
+          # Give the app time to fully render (splash + initial load)
+          sleep 8
+
+      # ─── Capture Screenshots ───────────────────────────────────
+      - name: Capture Screenshots
+        run: |
+          mkdir -p $RUNNER_TEMP/screenshots
+
+          # Screenshot 1: Initial state (after splash)
+          xcrun simctl io "${{ env.DEVICE_UDID }}" screenshot $RUNNER_TEMP/screenshots/01-launch.png
+          echo "Captured: 01-launch.png"
+
+          # Give extra time for any loading states to resolve
+          sleep 3
+
+          # Screenshot 2: App loaded state
+          xcrun simctl io "${{ env.DEVICE_UDID }}" screenshot $RUNNER_TEMP/screenshots/02-loaded.png
+          echo "Captured: 02-loaded.png"
+
+          # Try tapping different areas to navigate (approximate coordinates for tabs)
+          # These simulate tapping the bottom tab bar on an iPhone 16 (393pt wide)
+          # Train tab is roughly at x=65, Eat tab at x=197, Stats tab at x=328
+          # Tab bar is near the bottom, around y=830
+
+          # Tap "Eat" tab (middle of bottom bar)
+          xcrun simctl io "${{ env.DEVICE_UDID }}" screenshot $RUNNER_TEMP/screenshots/03-current-tab.png
+          echo "Captured: 03-current-tab.png"
+
+          echo "All screenshots captured"
+          ls -la $RUNNER_TEMP/screenshots/
+
+      # ─── Optional Video Recording ─────────────────────────────
+      - name: Record Video (optional)
+        if: ${{ github.event.inputs.capture_video == 'true' }}
+        run: |
+          # Terminate and relaunch for a clean recording
+          xcrun simctl terminate "${{ env.DEVICE_UDID }}" com.ghostlog.app 2>/dev/null || true
+          sleep 1
+
+          # Start recording
+          xcrun simctl io "${{ env.DEVICE_UDID }}" recordVideo --force $RUNNER_TEMP/screenshots/app-launch.mp4 &
+          RECORD_PID=$!
+
+          # Launch and wait
+          xcrun simctl launch "${{ env.DEVICE_UDID }}" com.ghostlog.app
+          sleep 15
+
+          # Stop recording
+          kill -INT $RECORD_PID 2>/dev/null || true
+          wait $RECORD_PID 2>/dev/null || true
+          echo "Video saved: app-launch.mp4"
+
+      # ─── Collect Logs ──────────────────────────────────────────
+      - name: Stop Log Collection
+        if: always()
+        run: |
+          # Stop the background log stream
+          kill ${{ env.LOG_PID }} 2>/dev/null || true
+          sleep 1
+
+          # Also grab the system log for the app
+          xcrun simctl spawn "${{ env.DEVICE_UDID }}" log collect \
+            --start "$(date -v-5M '+%Y-%m-%d %H:%M:%S')" \
+            --output $RUNNER_TEMP/system.logarchive 2>/dev/null || true
+
+          # Show log tail in workflow output for quick debugging
+          echo "=== Last 100 lines of simulator log ==="
+          tail -100 $RUNNER_TEMP/simulator.log 2>/dev/null || echo "No simulator log found"
+
+      - name: Capture Crash Logs
+        if: always()
+        run: |
+          mkdir -p $RUNNER_TEMP/crash-logs
+          # Copy any crash reports
+          cp ~/Library/Logs/DiagnosticReports/*GhostLog* $RUNNER_TEMP/crash-logs/ 2>/dev/null || true
+          cp ~/Library/Logs/DiagnosticReports/*App* $RUNNER_TEMP/crash-logs/ 2>/dev/null || true
+          echo "Crash logs collected (may be empty if no crashes):"
+          ls -la $RUNNER_TEMP/crash-logs/ 2>/dev/null || echo "No crash logs"
+
+      # ─── Export .app for Appetize.io (optional) ────────────────
+      - name: Package .app for Appetize.io
+        run: |
+          cd "$(dirname "${{ env.APP_PATH }}")"
+          zip -r $RUNNER_TEMP/screenshots/GhostLog-simulator.zip "$(basename "${{ env.APP_PATH }}")"
+          echo "Appetize-ready bundle: GhostLog-simulator.zip"
+          ls -lh $RUNNER_TEMP/screenshots/GhostLog-simulator.zip
+
+      # ─── Upload Artifacts ──────────────────────────────────────
+      - name: Upload Screenshots & Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-results
+          path: |
+            ${{ runner.temp }}/screenshots/
+            ${{ runner.temp }}/simulator.log
+            ${{ runner.temp }}/crash-logs/
+          retention-days: 14
+
+      - name: Upload Build Log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: ${{ runner.temp }}/xcodebuild.log
+          retention-days: 7
+
+      # ─── Cleanup ───────────────────────────────────────────────
+      - name: Shutdown Simulator
+        if: always()
+        run: |
+          xcrun simctl shutdown "${{ env.DEVICE_UDID }}" 2>/dev/null || true

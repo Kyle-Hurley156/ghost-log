@@ -26,6 +26,7 @@ import { CardioModal } from './components/CardioModal';
 import { GhostChefModal } from './components/GhostChefModal';
 import { TargetEditorModal } from './components/TargetEditorModal';
 import { GhostAiPanel } from './components/GhostAiPanel';
+import { PromptModal } from './components/PromptModal';
 import { AddMealModal } from './components/AddMealModal';
 import { DailyCheckinModal } from './components/DailyCheckinModal';
 import { TrainTab } from './components/TrainTab';
@@ -385,7 +386,17 @@ export default function App() {
           // Handle magic link sign-in (must run after Firebase init)
           if (isSignInWithEmailLink(auth, window.location.href)) {
             let email = window.localStorage.getItem('ghostlog_magic_email');
-            if (!email) email = window.prompt('Enter your email to confirm sign-in:');
+            if (!email) {
+              // Magic link needs email confirmation — use requestPrompt after init
+              requestPrompt('Enter your email to confirm sign-in:', '', async (promptedEmail) => {
+                try {
+                  await signInWithEmailLink(auth, promptedEmail, window.location.href);
+                  window.localStorage.removeItem('ghostlog_magic_email');
+                  window.history.replaceState(null, '', window.location.origin);
+                } catch (e) { console.error('Magic link sign-in failed', e); }
+              });
+              return;
+            }
             if (email) {
               try {
                 await signInWithEmailLink(auth, email, window.location.href);
@@ -990,13 +1001,15 @@ export default function App() {
   const dragOverItem = useRef(null);
   const requestConfirm = (msg, action) => { setConfirmState({ isOpen: true, message: msg, onConfirm: () => { action(); setConfirmState({ isOpen: false, message: '', onConfirm: null }); } }); };
   const [confirmState, setConfirmState] = useState({ isOpen: false, message: '', onConfirm: null });
+  const [promptState, setPromptState] = useState({ isOpen: false, message: '', defaultValue: '', onSubmit: null });
+  const requestPrompt = (msg, defaultVal, action) => { setPromptState({ isOpen: true, message: msg, defaultValue: defaultVal || '', onSubmit: (val) => { action(val); setPromptState({ isOpen: false, message: '', defaultValue: '', onSubmit: null }); } }); };
 
   // App Actions
   const handleSortSplits = () => { let _s = [...workoutSplits]; const d = _s.splice(dragItem.current, 1)[0]; _s.splice(dragOverItem.current, 0, d); dragItem.current=null; dragOverItem.current=null; setWorkoutSplits(_s); };
   const handleSortMeals = () => { let _m = [...savedMeals]; const d = _m.splice(dragItem.current, 1)[0]; _m.splice(dragOverItem.current, 0, d); dragItem.current=null; dragOverItem.current=null; setSavedMeals(_m); };
-  const addSplit = () => { const n = window.prompt("Name:"); if(n) setWorkoutSplits([...workoutSplits, {id:`s-${Date.now()}`,name:n,exercises:[]}]); };
+  const addSplit = () => { requestPrompt("New split name:", '', (n) => setWorkoutSplits(prev => [...prev, {id:`s-${Date.now()}`,name:n,exercises:[]}])); };
   const deleteSplit = (id) => { requestConfirm("Delete this split?", () => setWorkoutSplits(workoutSplits.filter(s=>s.id!==id))); };
-  const renameSplit = (id, old) => { const n=window.prompt("Name:",old); if(n) setWorkoutSplits(workoutSplits.map(s=>s.id===id?{...s,name:n}:s)); };
+  const renameSplit = (id, old) => { requestPrompt("Rename split:", old, (n) => setWorkoutSplits(prev => prev.map(s=>s.id===id?{...s,name:n}:s))); };
   const deleteSavedMeal = (id) => setSavedMeals(savedMeals.filter(m=>m.id!==id));
   const logMeal = (meal) => { const m=meal.ingredients.reduce((a,i)=>({cal:a.cal+i.cal,p:a.p+i.p,c:a.c+i.c,f:a.f+i.f}),{cal:0,p:0,c:0,f:0}); setDailyLog([...dailyLog, {name:meal.name, totalCals:m.cal, totalP:m.p, totalC:m.c, totalF:m.f}]); setToastMsg("Meal Logged"); };
   const deleteLogItem = (i) => setDailyLog(dailyLog.filter((_,idx)=>idx!==i));
@@ -1021,6 +1034,7 @@ export default function App() {
       <div className="bg-black min-h-screen text-gray-100 font-sans relative overflow-hidden pt-16">
         {toastMsg && <Toast message={toastMsg} onClose={() => setToastMsg(null)} />}
         <ConfirmModal isOpen={confirmState.isOpen} message={confirmState.message} onConfirm={confirmState.onConfirm} onCancel={() => setConfirmState({isOpen:false, message:'', onConfirm:null})} />
+        <PromptModal isOpen={promptState.isOpen} message={promptState.message} defaultValue={promptState.defaultValue} onSubmit={promptState.onSubmit} onCancel={() => setPromptState({isOpen:false, message:'', defaultValue:'', onSubmit:null})} />
 
         {showOnboarding && <OnboardingModal onComplete={() => { setShowOnboarding(false); setLogDate(getLocalDate()); setShowDailyCheckin(true); }} setPhase={setPhase} setUserTargets={setUserTargets} userTargets={userTargets} />}
 
@@ -1049,7 +1063,7 @@ export default function App() {
            setToastMsg("Cardio Logged");
         }} />
 
-        <GhostAiPanel show={showGhostPanel} onClose={()=>setShowGhostPanel(false)} workoutHistory={workoutHistory} setToast={setToastMsg}/>
+        <GhostAiPanel show={showGhostPanel} onClose={()=>setShowGhostPanel(false)} workoutHistory={workoutHistory} setToast={setToastMsg} statsHistory={statsHistory} userTargets={currentTargets} phase={phase} dailyLog={dailyLog} isPro={isPro} handlePremiumFeature={handlePremiumFeature} aiCooldown={aiCooldown} setAiCooldown={setAiCooldown}/>
 
         {/* Floating Ghost AI Button */}
         {!showGhostPanel && !showDailyCheckin && !showAddMealModal && !showTargetModal && !showGhostChefModal && !showCardioModal && !showPaywall && (
@@ -1112,7 +1126,7 @@ export default function App() {
 
         {/* MAIN CONTENT AREA */}
         <div className="pt-48 pb-32">
-           {activeTab === 'train' && <div className="p-4"><TrainTab workoutSplits={workoutSplits} setWorkoutSplits={setWorkoutSplits} workoutHistory={workoutHistory} setWorkoutHistory={setWorkoutHistory} workoutEditMode={workoutEditMode} setWorkoutEditMode={setWorkoutEditMode} addSplit={addSplit} deleteSplit={deleteSplit} renameSplit={renameSplit} handleSortSplits={handleSortSplits} dragItem={dragItem} dragOverItem={dragOverItem} phase={phase} dailyStats={dailyStatsInput} requestConfirm={requestConfirm} setShowCardioModal={setShowCardioModal} customExercises={customExercises} onCreateExercise={(name) => setCustomExercises(prev => [...new Set([...prev, name])])}/></div>}
+           {activeTab === 'train' && <div className="p-4"><TrainTab workoutSplits={workoutSplits} setWorkoutSplits={setWorkoutSplits} workoutHistory={workoutHistory} setWorkoutHistory={setWorkoutHistory} workoutEditMode={workoutEditMode} setWorkoutEditMode={setWorkoutEditMode} addSplit={addSplit} deleteSplit={deleteSplit} renameSplit={renameSplit} handleSortSplits={handleSortSplits} dragItem={dragItem} dragOverItem={dragOverItem} phase={phase} dailyStats={dailyStatsInput} requestConfirm={requestConfirm} requestPrompt={requestPrompt} setShowCardioModal={setShowCardioModal} customExercises={customExercises} onCreateExercise={(name) => setCustomExercises(prev => [...new Set([...prev, name])])}/></div>}
 
            {activeTab === 'eat' && <div className="p-4"><EatTab savedMeals={savedMeals} dailyLog={dailyLog} mealEditMode={mealEditMode} setMealEditMode={setMealEditMode} setShowAddMealModal={setShowAddMealModal} setShowGhostChefModal={setShowGhostChefModal} logMeal={logMeal} deleteSavedMeal={deleteSavedMeal} deleteLogItem={deleteLogItem} getMealMacros={(m)=>m.ingredients.reduce((a,i)=>({cal:a.cal+i.cal,p:a.p+i.p,c:a.c+i.c,f:a.f+i.f}),{cal:0,p:0,c:0,f:0})} dragItem={dragItem} dragOverItem={dragOverItem} handleSortMeals={handleSortMeals} requestConfirm={requestConfirm} userTargets={currentTargets} dailyStats={dailyStatsInput} isPro={isPro} handlePremiumFeature={handlePremiumFeature}/></div>}
 
