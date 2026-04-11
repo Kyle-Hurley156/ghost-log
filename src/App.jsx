@@ -9,8 +9,8 @@ import { Capacitor } from '@capacitor/core';
 // module-level crashes on iOS (native plugin bridge may not be available).
 
 import { initializeApp, getApps } from 'firebase/app';
-import { initializeAuth, getAuth, browserLocalPersistence, indexedDBLocalPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithCredential, signInWithPopup, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, sendPasswordResetEmail, verifyPasswordResetCode, confirmPasswordReset } from 'firebase/auth';
-import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
+import { initializeAuth, getAuth, browserLocalPersistence, indexedDBLocalPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithCredential, signInWithPopup, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, sendPasswordResetEmail, verifyPasswordResetCode, confirmPasswordReset, deleteUser } from 'firebase/auth';
+import { getFirestore, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 
 import { FIREBASE_CONFIG, INITIAL_SPLITS, INITIAL_TARGETS } from './constants';
 import { getLocalDate, useStickyState } from './helpers';
@@ -867,6 +867,27 @@ export default function App() {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    try {
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user) { setToastMsg("Not signed in"); return; }
+      const db = getFirestore();
+      await deleteDoc(doc(db, `artifacts/${FIREBASE_CONFIG.appId || 'ghost-log'}/users/${user.uid}/userData/backup`));
+      await deleteUser(user);
+      setCloudUser(null);
+      setCloudStatus('disconnected');
+      localStorage.clear();
+      setToastMsg("Account deleted. All data removed.");
+    } catch (e) {
+      if (e.code === 'auth/requires-recent-login') {
+        setToastMsg("Please log out and log back in, then try deleting again.");
+      } else {
+        setToastMsg("Delete failed: " + e.message);
+      }
+    }
+  };
+
   // --- CLOUD SYNC ENGINE (push all data) ---
   useEffect(() => {
     if (!cloudUser || !FIREBASE_CONFIG.apiKey || !dataLoaded) return;
@@ -1038,7 +1059,7 @@ export default function App() {
 
         {showOnboarding && <OnboardingModal onComplete={() => { setShowOnboarding(false); setLogDate(getLocalDate()); setShowDailyCheckin(true); }} setPhase={setPhase} setUserTargets={setUserTargets} userTargets={userTargets} />}
 
-        <SettingsPanel show={showSettings} onClose={() => setShowSettings(false)} onLogout={handleLogout} userEmail={cloudUser?.email} requestConfirm={requestConfirm} onAuth={handleAuth} onForgotPassword={handleForgotPassword} authLoading={authLoading} authError={authError} />
+        <SettingsPanel show={showSettings} onClose={() => setShowSettings(false)} onLogout={handleLogout} onDeleteAccount={handleDeleteAccount} userEmail={cloudUser?.email} requestConfirm={requestConfirm} onAuth={handleAuth} onForgotPassword={handleForgotPassword} authLoading={authLoading} authError={authError} />
 
         <DailyCheckinModal isOpen={showDailyCheckin} onClose={()=>setShowDailyCheckin(false)} stats={dailyStatsInput} setStats={setDailyStatsInput} onSave={submitDailyLog} date={logDate} setDate={setLogDate}/>
 

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { X, LogOut, Shield, FileText, Info, ExternalLink, Trash2, Cloud, CloudOff, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { X, LogOut, Shield, FileText, Info, ExternalLink, Trash2, Cloud, CloudOff, Eye, EyeOff, Loader2, UserX } from 'lucide-react';
 import { APP_VERSION } from '../constants';
 
-export const SettingsPanel = ({ show, onClose, onLogout, userEmail, requestConfirm, onAuth, onForgotPassword, authLoading, authError }) => {
+export const SettingsPanel = ({ show, onClose, onLogout, onDeleteAccount, userEmail, requestConfirm, onAuth, onForgotPassword, authLoading, authError }) => {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -114,9 +114,14 @@ export const SettingsPanel = ({ show, onClose, onLogout, userEmail, requestConfi
               <Trash2 size={16} className="text-gray-500"/> Clear Local Cache
             </button>
             {isSignedIn && (
-              <button onClick={onLogout} className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-red-500/5 transition-colors text-sm text-red-400">
-                <LogOut size={16}/> Log Out
-              </button>
+              <>
+                <button onClick={onLogout} className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-red-500/5 transition-colors text-sm text-red-400">
+                  <LogOut size={16}/> Log Out
+                </button>
+                <button onClick={() => requestConfirm('Permanently delete your account and all cloud data? This cannot be undone.', onDeleteAccount)} className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-red-500/5 transition-colors text-sm text-red-500">
+                  <UserX size={16}/> Delete Account
+                </button>
+              </>
             )}
           </div>
         </div>
