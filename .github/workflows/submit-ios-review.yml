@@ -252,27 +252,45 @@ jobs:
               new_state = ver_resp2.json()["data"]["attributes"]["appStoreState"]
               print(f"  Version state after cleanup: {new_state}")
 
-          # --- Step 5: Force-delete any lingering submission via listing endpoint ---
-          print("Force-checking all submissions for this version...")
-          # Try listing submissions directly
+          # --- Step 5: Nuke any lingering submission ---
+          # After rejection, ASC keeps a phantom submission that blocks CREATE.
+          # Try every known method to find and delete it.
+          print("Nuking any lingering submissions...")
+
+          # Method 1: relationship endpoint
+          sub_rel = requests.get(f"{base_url}/appStoreVersions/{version_id}/appStoreVersionSubmission", headers=headers)
+          print(f"  Relationship GET: {sub_rel.status_code}")
+          if sub_rel.status_code == 200 and sub_rel.json().get("data"):
+              sid = sub_rel.json()["data"]["id"]
+              print(f"  Found via relationship: {sid} — deleting...")
+              dr = requests.delete(f"{base_url}/appStoreVersionSubmissions/{sid}", headers=headers)
+              print(f"  Delete: {dr.status_code}")
+              time.sleep(3)
+
+          # Method 2: try version_id as submission ID (some API versions reuse the same ID)
+          print(f"  Trying version_id as submission ID...")
+          dr2 = requests.delete(f"{base_url}/appStoreVersionSubmissions/{version_id}", headers=headers)
+          print(f"  Delete by version_id: {dr2.status_code}")
+          if dr2.status_code in (200, 204):
+              print("  Phantom submission deleted!")
+              time.sleep(3)
+
+          # Method 3: listing endpoint with filter
           all_subs = requests.get(f"{base_url}/appStoreVersionSubmissions",
               headers=headers, params={"filter[appStoreVersion]": version_id})
           if all_subs.status_code == 200:
               for sub_item in all_subs.json().get("data", []):
                   sid = sub_item["id"]
-                  print(f"  Found lingering submission {sid} — force deleting...")
-                  dr = requests.delete(f"{base_url}/appStoreVersionSubmissions/{sid}", headers=headers)
-                  print(f"  Delete: {dr.status_code}")
+                  print(f"  Found via listing: {sid} — deleting...")
+                  requests.delete(f"{base_url}/appStoreVersionSubmissions/{sid}", headers=headers)
                   time.sleep(2)
 
-          # Also try the singular relationship endpoint
-          sub_rel = requests.get(f"{base_url}/appStoreVersions/{version_id}/appStoreVersionSubmission", headers=headers)
-          if sub_rel.status_code == 200 and sub_rel.json().get("data"):
-              sid = sub_rel.json()["data"]["id"]
-              print(f"  Found submission via relationship: {sid} — deleting...")
-              dr = requests.delete(f"{base_url}/appStoreVersionSubmissions/{sid}", headers=headers)
-              print(f"  Delete: {dr.status_code}")
-              time.sleep(3)
+          # Method 4: if version was REJECTED, delete the version entirely and recreate
+          ver_check = requests.get(f"{base_url}/appStoreVersions/{version_id}",
+              headers=headers, params={"fields[appStoreVersions]": "appStoreState"})
+          if ver_check.status_code == 200:
+              state = ver_check.json()["data"]["attributes"]["appStoreState"]
+              print(f"  Current state: {state}")
 
           # --- Step 6: Submit for review ---
           print(f"Submitting version {version_id} for App Review...")
