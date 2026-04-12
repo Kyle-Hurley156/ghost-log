@@ -1,9 +1,25 @@
 import React from 'react';
-import { Plus, Flame, Trash2, GripVertical, ChefHat, Lock } from 'lucide-react';
+import { Plus, Flame, Trash2, GripVertical, ChefHat, Lock, Droplets } from 'lucide-react';
 
-export const EatTab = ({ savedMeals, dailyLog, mealEditMode, setMealEditMode, setShowAddMealModal, setShowGhostChefModal, logMeal, deleteSavedMeal, deleteLogItem, getMealMacros, dragItem, dragOverItem, handleSortMeals, requestConfirm, userTargets, dailyStats, isPro, handlePremiumFeature }) => {
+export const EatTab = ({ savedMeals, dailyLog, mealEditMode, setMealEditMode, setShowAddMealModal, setShowGhostChefModal, logMeal, deleteSavedMeal, deleteLogItem, getMealMacros, dragItem, dragOverItem, handleSortMeals, requestConfirm, userTargets, dailyStats, isPro, handlePremiumFeature, waterCount, setWaterCount }) => {
   return (
     <div className="animate-in fade-in">
+      {/* Quick Water Tracker */}
+      {setWaterCount && (
+        <div className="bg-gray-900/50 border border-gray-800/50 rounded-xl p-3 mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Droplets size={14} className="text-blue-400"/>
+            <span className="text-[10px] text-gray-500 font-bold uppercase">Water</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setWaterCount(Math.max(0, (waterCount || 0) - 1))} className="w-7 h-7 rounded-lg bg-gray-800 text-gray-400 font-bold text-sm flex items-center justify-center active:scale-90 transition-transform">-</button>
+            <span className="text-white font-black text-lg w-8 text-center tabular-nums">{waterCount || 0}</span>
+            <button onClick={() => setWaterCount((waterCount || 0) + 1)} className="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 font-bold text-sm flex items-center justify-center active:scale-90 transition-transform border border-blue-500/30">+</button>
+            <span className="text-[9px] text-gray-600 ml-1">glasses</span>
+          </div>
+        </div>
+      )}
+
       <div className="flex justify-between items-end mb-4">
         <h2 className="text-gray-500 font-bold text-[10px] tracking-[0.2em] uppercase flex items-center gap-2"><Flame size={12}/> Meal Bank</h2>
         <div className="flex gap-2">
