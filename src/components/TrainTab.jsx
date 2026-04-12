@@ -8,7 +8,7 @@ export const TrainTab = ({
   workoutSplits, setWorkoutSplits, workoutHistory, setWorkoutHistory,
   workoutEditMode, setWorkoutEditMode, addSplit, deleteSplit, renameSplit, handleSortSplits,
   dragItem, dragOverItem, phase, dailyStats, requestConfirm, requestPrompt, setShowCardioModal,
-  customExercises, onCreateExercise, setToast
+  customExercises, onCreateExercise, setToast, onWorkoutComplete
 }) => {
   const [mode, setMode] = useState('SPLIT_SELECT');
   const [activeSession, setActiveSession] = useState(null);
@@ -96,8 +96,19 @@ export const TrainTab = ({
     const log = { date: getLocalDate(), name: activeSession.name, type: 'strength', prs: prNames, note: workoutNote || undefined, duration: workoutElapsed, exercises: activeSession.exercises.map(ex => ({ name: ex.name, sets: ex.sets.filter(s => s.weight && s.reps).map(s => ({ weight: s.weight, reps: s.reps })) })) };
     setWorkoutHistory([...workoutHistory, log]);
     setWorkoutNote('');
-    // Show PR celebration
-    if (prs.length > 0 && setToast) {
+    // Show workout completion summary
+    if (onWorkoutComplete) {
+      let totalSets = 0, totalVolume = 0;
+      activeSession.exercises.forEach(ex => {
+        ex.sets.forEach(s => {
+          if (s.weight && s.reps) {
+            totalSets++;
+            totalVolume += (parseFloat(s.weight) || 0) * (parseFloat(s.reps) || 0);
+          }
+        });
+      });
+      onWorkoutComplete({ name: activeSession.name, duration: workoutElapsed, exercises: activeSession.exercises, totalSets, totalVolume, prs });
+    } else if (prs.length > 0 && setToast) {
       const prText = prs.map(p => `${p.exercise} ${p.weight}kg`).join(', ');
       setTimeout(() => setToast(`NEW PR! ${prText}`), 300);
     }

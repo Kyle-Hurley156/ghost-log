@@ -33,6 +33,7 @@ import { TrainTab } from './components/TrainTab';
 import { EatTab } from './components/EatTab';
 import { StatsTab } from './components/StatsTab';
 import { WorkoutHistoryModal } from './components/WorkoutHistoryModal';
+import { WorkoutSummaryModal } from './components/WorkoutSummaryModal';
 
 // debugLog: no-op in production, keeps call sites intact for future debugging
 const debugLog = () => {};
@@ -229,6 +230,7 @@ export default function App() {
   const [showGhostPanel, setShowGhostPanel] = useState(false);
   const [showTargetModal, setShowTargetModal] = useState(false);
   const [showWorkoutHistory, setShowWorkoutHistory] = useState(false);
+  const [workoutSummary, setWorkoutSummary] = useState(null);
   const [showGhostChefModal, setShowGhostChefModal] = useState(false);
   const [showCardioModal, setShowCardioModal] = useState(false);
   const [showAddMealModal, setShowAddMealModal] = useState(false);
@@ -1087,6 +1089,7 @@ export default function App() {
         }} />
 
         <WorkoutHistoryModal isOpen={showWorkoutHistory} onClose={() => setShowWorkoutHistory(false)} workoutHistory={workoutHistory} />
+        <WorkoutSummaryModal isOpen={!!workoutSummary} onClose={() => setWorkoutSummary(null)} summary={workoutSummary} setToast={setToastMsg} />
 
         <GhostAiPanel show={showGhostPanel} onClose={()=>setShowGhostPanel(false)} workoutHistory={workoutHistory} setToast={setToastMsg} statsHistory={statsHistory} userTargets={currentTargets} phase={phase} dailyLog={dailyLog} isPro={isPro} handlePremiumFeature={handlePremiumFeature} aiCooldown={aiCooldown} setAiCooldown={setAiCooldown}/>
 
@@ -1151,7 +1154,7 @@ export default function App() {
 
         {/* MAIN CONTENT AREA */}
         <div className="pt-48 pb-32">
-           {activeTab === 'train' && <div className="p-4"><TrainTab workoutSplits={workoutSplits} setWorkoutSplits={setWorkoutSplits} workoutHistory={workoutHistory} setWorkoutHistory={setWorkoutHistory} workoutEditMode={workoutEditMode} setWorkoutEditMode={setWorkoutEditMode} addSplit={addSplit} deleteSplit={deleteSplit} renameSplit={renameSplit} handleSortSplits={handleSortSplits} dragItem={dragItem} dragOverItem={dragOverItem} phase={phase} dailyStats={dailyStatsInput} requestConfirm={requestConfirm} requestPrompt={requestPrompt} setShowCardioModal={setShowCardioModal} customExercises={customExercises} onCreateExercise={(name) => setCustomExercises(prev => [...new Set([...prev, name])])} setToast={setToastMsg}/></div>}
+           {activeTab === 'train' && <div className="p-4"><TrainTab workoutSplits={workoutSplits} setWorkoutSplits={setWorkoutSplits} workoutHistory={workoutHistory} setWorkoutHistory={setWorkoutHistory} workoutEditMode={workoutEditMode} setWorkoutEditMode={setWorkoutEditMode} addSplit={addSplit} deleteSplit={deleteSplit} renameSplit={renameSplit} handleSortSplits={handleSortSplits} dragItem={dragItem} dragOverItem={dragOverItem} phase={phase} dailyStats={dailyStatsInput} requestConfirm={requestConfirm} requestPrompt={requestPrompt} setShowCardioModal={setShowCardioModal} customExercises={customExercises} onCreateExercise={(name) => setCustomExercises(prev => [...new Set([...prev, name])])} setToast={setToastMsg} onWorkoutComplete={setWorkoutSummary}/></div>}
 
            {activeTab === 'eat' && <div className="p-4"><EatTab savedMeals={savedMeals} dailyLog={dailyLog} mealEditMode={mealEditMode} setMealEditMode={setMealEditMode} setShowAddMealModal={setShowAddMealModal} setShowGhostChefModal={setShowGhostChefModal} logMeal={logMeal} deleteSavedMeal={deleteSavedMeal} deleteLogItem={deleteLogItem} getMealMacros={(m)=>m.ingredients.reduce((a,i)=>({cal:a.cal+i.cal,p:a.p+i.p,c:a.c+i.c,f:a.f+i.f}),{cal:0,p:0,c:0,f:0})} dragItem={dragItem} dragOverItem={dragOverItem} handleSortMeals={handleSortMeals} requestConfirm={requestConfirm} userTargets={currentTargets} dailyStats={dailyStatsInput} isPro={isPro} handlePremiumFeature={handlePremiumFeature}/></div>}
 
