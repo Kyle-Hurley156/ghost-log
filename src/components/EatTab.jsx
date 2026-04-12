@@ -54,6 +54,32 @@ export const EatTab = ({ savedMeals, dailyLog, mealEditMode, setMealEditMode, se
         </div>
       )}
 
+      {/* Macro Progress Bars */}
+      {(dailyStats.weight || dailyLog.length > 0) && (
+        <div className="bg-gray-900/50 border border-gray-800/50 rounded-xl p-4 mb-4 mt-4">
+          {[
+            { label: 'Calories', current: dailyLog.reduce((a, m) => a + (m.totalCals || 0), 0), target: userTargets.cal, color: 'var(--accent)', unit: 'kcal' },
+            { label: 'Protein', current: dailyLog.reduce((a, m) => a + (m.totalP || 0), 0), target: userTargets.p, color: '#f87171', unit: 'g' },
+            { label: 'Carbs', current: dailyLog.reduce((a, m) => a + (m.totalC || 0), 0), target: userTargets.c, color: '#fb923c', unit: 'g' },
+            { label: 'Fat', current: dailyLog.reduce((a, m) => a + (m.totalF || 0), 0), target: userTargets.f, color: '#facc15', unit: 'g' },
+          ].filter(m => m.target > 0).map((m, i) => {
+            const pct = Math.min(100, (m.current / m.target) * 100);
+            const over = m.current > m.target;
+            return (
+              <div key={i} className="mb-2 last:mb-0">
+                <div className="flex justify-between text-[9px] font-bold mb-1">
+                  <span className="text-gray-500 uppercase">{m.label}</span>
+                  <span className={over ? 'text-red-400' : 'text-gray-400'}>{m.current}/{m.target} {m.unit}</span>
+                </div>
+                <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: over ? '#ef4444' : m.color }}/>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* Today's Log */}
       <div>
         <div className="flex justify-between items-center mb-3 mt-4">

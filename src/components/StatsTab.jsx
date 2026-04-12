@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Edit3, Loader2, Lock, Dumbbell, HeartPulse, Sparkles, Download, TrendingUp, Trophy, ChevronRight } from 'lucide-react';
+import { Edit3, Loader2, Lock, Dumbbell, HeartPulse, Sparkles, Download, TrendingUp, Trophy, ChevronRight, Flame } from 'lucide-react';
 import { API_URL } from '../constants';
 import { getLocalDate } from '../helpers';
 
@@ -41,6 +41,26 @@ export const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workou
       });
     });
     return { workouts: thisWeek.length, strength: strengthSessions.length, cardio: cardioSessions.length, sets: totalSets, volume: totalVolume, prs: prCount };
+  }, [workoutHistory]);
+
+  // Heatmap: last 12 weeks (84 days)
+  const heatmapData = useMemo(() => {
+    const workoutDates = {};
+    workoutHistory.forEach(w => {
+      workoutDates[w.date] = (workoutDates[w.date] || 0) + 1;
+    });
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0=Sun
+    const cells = [];
+    // Go back 12 weeks from end of current week
+    const totalDays = 12 * 7 + dayOfWeek + 1;
+    for (let i = totalDays - 1; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const ds = d.toISOString().split('T')[0];
+      cells.push({ date: ds, count: workoutDates[ds] || 0, dow: d.getDay() });
+    }
+    return cells;
   }, [workoutHistory]);
 
   // Compute strength progress: best weight per exercise per session
@@ -179,6 +199,37 @@ export const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workou
            <div className="text-center"><p className="text-xl font-black text-yellow-400">{weeklyStats.prs}</p><p className="text-[9px] text-gray-600 uppercase font-bold flex items-center justify-center gap-0.5"><Trophy size={8} className="text-yellow-400"/>PRs</p></div>
          </div>
        </div>
+
+       {/* Streak Heatmap */}
+       {workoutHistory.length > 0 && (
+         <div className="bg-gray-900/50 border border-gray-800/50 p-4 rounded-xl mb-6">
+           <div className="flex justify-between items-center mb-3">
+             <h3 className="text-gray-500 font-bold text-[10px] uppercase tracking-[0.2em] flex items-center gap-1"><Flame size={10} className="text-orange-400"/> Consistency</h3>
+             <span className="text-[9px] text-gray-600 font-bold">12 WEEKS</span>
+           </div>
+           <div className="flex gap-[2px] flex-wrap" style={{ display: 'grid', gridTemplateRows: 'repeat(7, 1fr)', gridAutoFlow: 'column', gap: '2px' }}>
+             {heatmapData.map((cell, i) => (
+               <div key={i} title={`${cell.date}: ${cell.count} workout${cell.count !== 1 ? 's' : ''}`}
+                 className="rounded-sm transition-colors"
+                 style={{
+                   width: '10px', height: '10px',
+                   backgroundColor: cell.count === 0 ? 'rgba(255,255,255,0.04)' : cell.count === 1 ? 'var(--accent-dim)' : 'var(--accent)',
+                   opacity: cell.count === 0 ? 1 : cell.count === 1 ? 0.8 : 1,
+                 }}
+               />
+             ))}
+           </div>
+           <div className="flex justify-between mt-2">
+             <span className="text-[8px] text-gray-700">Less</span>
+             <div className="flex gap-1 items-center">
+               <div className="w-2 h-2 rounded-sm" style={{ backgroundColor: 'rgba(255,255,255,0.04)' }}/>
+               <div className="w-2 h-2 rounded-sm" style={{ backgroundColor: 'var(--accent-dim)', opacity: 0.8 }}/>
+               <div className="w-2 h-2 rounded-sm" style={{ backgroundColor: 'var(--accent)' }}/>
+             </div>
+             <span className="text-[8px] text-gray-700">More</span>
+           </div>
+         </div>
+       )}
 
        {/* Ghost Report */}
        <div className="accent-bg-dim accent-border-dim border p-4 rounded-xl relative overflow-hidden mb-6">
