@@ -32,6 +32,7 @@ import { DailyCheckinModal } from './components/DailyCheckinModal';
 import { TrainTab } from './components/TrainTab';
 import { EatTab } from './components/EatTab';
 import { StatsTab } from './components/StatsTab';
+import { WorkoutHistoryModal } from './components/WorkoutHistoryModal';
 
 // debugLog: no-op in production, keeps call sites intact for future debugging
 const debugLog = () => {};
@@ -227,6 +228,7 @@ export default function App() {
   const [showDailyCheckin, setShowDailyCheckin] = useState(false);
   const [showGhostPanel, setShowGhostPanel] = useState(false);
   const [showTargetModal, setShowTargetModal] = useState(false);
+  const [showWorkoutHistory, setShowWorkoutHistory] = useState(false);
   const [showGhostChefModal, setShowGhostChefModal] = useState(false);
   const [showCardioModal, setShowCardioModal] = useState(false);
   const [showAddMealModal, setShowAddMealModal] = useState(false);
@@ -1084,6 +1086,8 @@ export default function App() {
            setToastMsg("Cardio Logged");
         }} />
 
+        <WorkoutHistoryModal isOpen={showWorkoutHistory} onClose={() => setShowWorkoutHistory(false)} workoutHistory={workoutHistory} />
+
         <GhostAiPanel show={showGhostPanel} onClose={()=>setShowGhostPanel(false)} workoutHistory={workoutHistory} setToast={setToastMsg} statsHistory={statsHistory} userTargets={currentTargets} phase={phase} dailyLog={dailyLog} isPro={isPro} handlePremiumFeature={handlePremiumFeature} aiCooldown={aiCooldown} setAiCooldown={setAiCooldown}/>
 
         {/* Floating Ghost AI Button */}
@@ -1147,11 +1151,11 @@ export default function App() {
 
         {/* MAIN CONTENT AREA */}
         <div className="pt-48 pb-32">
-           {activeTab === 'train' && <div className="p-4"><TrainTab workoutSplits={workoutSplits} setWorkoutSplits={setWorkoutSplits} workoutHistory={workoutHistory} setWorkoutHistory={setWorkoutHistory} workoutEditMode={workoutEditMode} setWorkoutEditMode={setWorkoutEditMode} addSplit={addSplit} deleteSplit={deleteSplit} renameSplit={renameSplit} handleSortSplits={handleSortSplits} dragItem={dragItem} dragOverItem={dragOverItem} phase={phase} dailyStats={dailyStatsInput} requestConfirm={requestConfirm} requestPrompt={requestPrompt} setShowCardioModal={setShowCardioModal} customExercises={customExercises} onCreateExercise={(name) => setCustomExercises(prev => [...new Set([...prev, name])])}/></div>}
+           {activeTab === 'train' && <div className="p-4"><TrainTab workoutSplits={workoutSplits} setWorkoutSplits={setWorkoutSplits} workoutHistory={workoutHistory} setWorkoutHistory={setWorkoutHistory} workoutEditMode={workoutEditMode} setWorkoutEditMode={setWorkoutEditMode} addSplit={addSplit} deleteSplit={deleteSplit} renameSplit={renameSplit} handleSortSplits={handleSortSplits} dragItem={dragItem} dragOverItem={dragOverItem} phase={phase} dailyStats={dailyStatsInput} requestConfirm={requestConfirm} requestPrompt={requestPrompt} setShowCardioModal={setShowCardioModal} customExercises={customExercises} onCreateExercise={(name) => setCustomExercises(prev => [...new Set([...prev, name])])} setToast={setToastMsg}/></div>}
 
            {activeTab === 'eat' && <div className="p-4"><EatTab savedMeals={savedMeals} dailyLog={dailyLog} mealEditMode={mealEditMode} setMealEditMode={setMealEditMode} setShowAddMealModal={setShowAddMealModal} setShowGhostChefModal={setShowGhostChefModal} logMeal={logMeal} deleteSavedMeal={deleteSavedMeal} deleteLogItem={deleteLogItem} getMealMacros={(m)=>m.ingredients.reduce((a,i)=>({cal:a.cal+i.cal,p:a.p+i.p,c:a.c+i.c,f:a.f+i.f}),{cal:0,p:0,c:0,f:0})} dragItem={dragItem} dragOverItem={dragOverItem} handleSortMeals={handleSortMeals} requestConfirm={requestConfirm} userTargets={currentTargets} dailyStats={dailyStatsInput} isPro={isPro} handlePremiumFeature={handlePremiumFeature}/></div>}
 
-           {activeTab === 'stats' && <div className="p-4"><StatsTab statsHistory={statsHistory} setLogDate={setLogDate} setShowDailyCheckin={setShowDailyCheckin} workoutHistory={workoutHistory} setToast={setToastMsg} userTargets={currentTargets} phase={phase} aiCooldown={aiCooldown} setAiCooldown={setAiCooldown} isPro={isPro} handlePremiumFeature={handlePremiumFeature} savedMeals={savedMeals} /></div>}
+           {activeTab === 'stats' && <div className="p-4"><StatsTab statsHistory={statsHistory} setLogDate={setLogDate} setShowDailyCheckin={setShowDailyCheckin} workoutHistory={workoutHistory} setToast={setToastMsg} userTargets={currentTargets} phase={phase} aiCooldown={aiCooldown} setAiCooldown={setAiCooldown} isPro={isPro} handlePremiumFeature={handlePremiumFeature} savedMeals={savedMeals} setShowWorkoutHistory={setShowWorkoutHistory} /></div>}
         </div>
 
         {/* BOTTOM NAV */}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Plus, Check, X, Edit3, Trash2, GripVertical, Sparkles, AlertTriangle, Activity, HeartPulse, Dumbbell, Timer, RotateCcw } from 'lucide-react';
-import { calculateReadiness, calculateSetTarget, getLocalDate } from '../helpers';
+import { calculateReadiness, calculateSetTarget, getLocalDate, detectPRs } from '../helpers';
 import { ExerciseSearchInput } from './ExerciseSearchInput';
 import { hapticLight, hapticSuccess, hapticMedium } from '../services/haptics';
 
@@ -8,7 +8,7 @@ export const TrainTab = ({
   workoutSplits, setWorkoutSplits, workoutHistory, setWorkoutHistory,
   workoutEditMode, setWorkoutEditMode, addSplit, deleteSplit, renameSplit, handleSortSplits,
   dragItem, dragOverItem, phase, dailyStats, requestConfirm, requestPrompt, setShowCardioModal,
-  customExercises, onCreateExercise
+  customExercises, onCreateExercise, setToast
 }) => {
   const [mode, setMode] = useState('SPLIT_SELECT');
   const [activeSession, setActiveSession] = useState(null);
@@ -89,8 +89,16 @@ export const TrainTab = ({
 
   const finishWorkout = () => {
     if (!activeSession.exercises.length) { setMode('SPLIT_SELECT'); setActiveSession(null); return; }
-    const log = { date: getLocalDate(), name: activeSession.name, type: 'strength', exercises: activeSession.exercises.map(ex => ({ name: ex.name, sets: ex.sets.filter(s => s.weight && s.reps).map(s => ({ weight: s.weight, reps: s.reps })) })) };
+    // Detect PRs before saving
+    const prs = detectPRs(activeSession.exercises, workoutHistory);
+    const prNames = prs.map(p => p.exercise);
+    const log = { date: getLocalDate(), name: activeSession.name, type: 'strength', prs: prNames, exercises: activeSession.exercises.map(ex => ({ name: ex.name, sets: ex.sets.filter(s => s.weight && s.reps).map(s => ({ weight: s.weight, reps: s.reps })) })) };
     setWorkoutHistory([...workoutHistory, log]);
+    // Show PR celebration
+    if (prs.length > 0 && setToast) {
+      const prText = prs.map(p => `${p.exercise} ${p.weight}kg`).join(', ');
+      setTimeout(() => setToast(`NEW PR! ${prText}`), 300);
+    }
     if (activeSession.splitId) {
        const updatedSplits = workoutSplits.map(split => {
          if (split.id === activeSession.splitId) {

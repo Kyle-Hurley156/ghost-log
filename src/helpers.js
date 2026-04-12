@@ -69,6 +69,45 @@ export function applyAccentColor(hex) {
   document.documentElement.style.setProperty('--accent-dim', `rgba(${r}, ${g}, ${b}, 0.15)`);
 }
 
+// Detect personal records from a completed workout session
+export function detectPRs(sessionExercises, workoutHistory) {
+  const prs = [];
+  if (!sessionExercises || !workoutHistory) return prs;
+
+  sessionExercises.forEach(ex => {
+    // Find best previous weight for this exercise across all history
+    let prevBestWeight = 0;
+    workoutHistory.forEach(session => {
+      if (session.type === 'cardio' || !session.exercises) return;
+      session.exercises.forEach(pastEx => {
+        if (pastEx.name.toLowerCase() === ex.name.toLowerCase()) {
+          (pastEx.sets || []).forEach(s => {
+            const w = parseFloat(s.weight) || 0;
+            if (w > prevBestWeight) prevBestWeight = w;
+          });
+        }
+      });
+    });
+
+    // Check if any completed set in this session beats the previous best
+    (ex.sets || []).forEach(set => {
+      const w = parseFloat(set.weight) || 0;
+      if (w > 0 && w > prevBestWeight) {
+        prs.push({ exercise: ex.name, weight: w, reps: set.reps, type: 'weight' });
+      }
+    });
+  });
+
+  // Deduplicate: keep only the highest PR per exercise
+  const best = {};
+  prs.forEach(pr => {
+    if (!best[pr.exercise] || pr.weight > best[pr.exercise].weight) {
+      best[pr.exercise] = pr;
+    }
+  });
+  return Object.values(best);
+}
+
 export function useStickyState(defaultValue, key) {
   const [value, setValue] = useState(() => {
     try {

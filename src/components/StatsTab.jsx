@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { Edit3, Loader2, Lock, Dumbbell, HeartPulse, Sparkles, Download, TrendingUp } from 'lucide-react';
+import { Edit3, Loader2, Lock, Dumbbell, HeartPulse, Sparkles, Download, TrendingUp, Trophy, ChevronRight } from 'lucide-react';
 import { API_URL } from '../constants';
 import { getLocalDate } from '../helpers';
 
-export const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workoutHistory, setToast, userTargets, phase, aiCooldown, setAiCooldown, isPro, handlePremiumFeature, savedMeals }) => {
+export const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workoutHistory, setToast, userTargets, phase, aiCooldown, setAiCooldown, isPro, handlePremiumFeature, savedMeals, setShowWorkoutHistory }) => {
   const [localStat, setLocalStat] = useState('weight');
   const [timeRange, setTimeRange] = useState('1W');
   const [focusedStatEntry, setFocusedStatEntry] = useState(null);
@@ -19,6 +19,28 @@ export const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workou
 
   const recentActivity = useMemo(() => {
     return [...workoutHistory].reverse().slice(0, 5);
+  }, [workoutHistory]);
+
+  // Weekly stats
+  const weeklyStats = useMemo(() => {
+    const now = new Date();
+    const weekAgo = new Date(now);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const weekStr = weekAgo.toISOString().split('T')[0];
+    const thisWeek = workoutHistory.filter(w => w.date >= weekStr);
+    const strengthSessions = thisWeek.filter(w => w.type !== 'cardio');
+    const cardioSessions = thisWeek.filter(w => w.type === 'cardio');
+    let totalSets = 0, totalVolume = 0, prCount = 0;
+    strengthSessions.forEach(s => {
+      prCount += (s.prs?.length || 0);
+      (s.exercises || []).forEach(ex => {
+        (ex.sets || []).forEach(set => {
+          totalSets++;
+          totalVolume += (parseFloat(set.weight) || 0) * (parseFloat(set.reps) || 0);
+        });
+      });
+    });
+    return { workouts: thisWeek.length, strength: strengthSessions.length, cardio: cardioSessions.length, sets: totalSets, volume: totalVolume, prs: prCount };
   }, [workoutHistory]);
 
   // Compute strength progress: best weight per exercise per session
@@ -147,6 +169,17 @@ export const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workou
          </div>
        </div>
 
+       {/* Weekly Summary */}
+       <div className="bg-gray-900/50 border border-gray-800/50 p-4 rounded-xl mb-6">
+         <h3 className="text-gray-500 font-bold text-[10px] uppercase tracking-[0.2em] mb-3">This Week</h3>
+         <div className="grid grid-cols-4 gap-2">
+           <div className="text-center"><p className="text-xl font-black text-white">{weeklyStats.workouts}</p><p className="text-[9px] text-gray-600 uppercase font-bold">Sessions</p></div>
+           <div className="text-center"><p className="text-xl font-black text-white">{weeklyStats.sets}</p><p className="text-[9px] text-gray-600 uppercase font-bold">Sets</p></div>
+           <div className="text-center"><p className="text-xl font-black text-white">{weeklyStats.volume > 0 ? (weeklyStats.volume / 1000).toFixed(1) : '0'}</p><p className="text-[9px] text-gray-600 uppercase font-bold">Vol (t)</p></div>
+           <div className="text-center"><p className="text-xl font-black text-yellow-400">{weeklyStats.prs}</p><p className="text-[9px] text-gray-600 uppercase font-bold flex items-center justify-center gap-0.5"><Trophy size={8} className="text-yellow-400"/>PRs</p></div>
+         </div>
+       </div>
+
        {/* Ghost Report */}
        <div className="accent-bg-dim accent-border-dim border p-4 rounded-xl relative overflow-hidden mb-6">
           <div className="flex justify-between items-start mb-2">
@@ -251,7 +284,14 @@ export const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workou
 
        {/* Recent Activity */}
        <div className="pb-10">
-         <h3 className="text-gray-500 font-bold text-[10px] uppercase mb-3 tracking-[0.2em]">Recent Activity</h3>
+         <div className="flex justify-between items-center mb-3">
+           <h3 className="text-gray-500 font-bold text-[10px] uppercase tracking-[0.2em]">Recent Activity</h3>
+           {workoutHistory.length > 5 && setShowWorkoutHistory && (
+             <button onClick={() => setShowWorkoutHistory(true)} className="text-[10px] accent-text font-bold flex items-center gap-0.5 transition-all active:scale-95">
+               VIEW ALL <ChevronRight size={10}/>
+             </button>
+           )}
+         </div>
          {recentActivity.length === 0 ? (
            <div className="bg-gray-900/50 rounded-xl p-6 border border-gray-800/50 text-center">
              <Dumbbell size={24} className="mx-auto mb-2 text-gray-700"/>
