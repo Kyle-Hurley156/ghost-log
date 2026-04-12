@@ -170,16 +170,26 @@ jobs:
                       print(f"  Version string updated to {version}")
                       break
 
-          # Strategy 3: Delete REJECTED versions and create fresh
+          # Strategy 3: Reuse REJECTED version by updating its version string
           if not version_id:
               for v in all_versions["data"]:
                   state = v["attributes"]["appStoreState"]
                   ver = v["attributes"]["versionString"]
                   if state in ["REJECTED", "DEVELOPER_REJECTED", "METADATA_REJECTED"]:
-                      print(f"  Deleting old {state} version {ver}...")
-                      r = requests.delete(f"{base_url}/appStoreVersions/{v['id']}", headers=headers)
-                      print(f"  Delete result: {r.status_code}")
+                      version_id = v["id"]
+                      print(f"  -> Reusing {state} version {ver}, updating to {version} (ID: {version_id})")
+                      api_patch(f"/appStoreVersions/{version_id}", {
+                          "data": {
+                              "type": "appStoreVersions",
+                              "id": version_id,
+                              "attributes": {"versionString": version}
+                          }
+                      })
+                      print(f"  Version string updated to {version}")
+                      break
 
+          # Strategy 4: Create fresh if nothing reusable found
+          if not version_id:
               print(f"Creating new appStoreVersion {version}...")
               result, status, text = api_post("/appStoreVersions", {
                   "data": {
