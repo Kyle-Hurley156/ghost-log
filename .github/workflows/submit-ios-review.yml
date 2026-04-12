@@ -216,8 +216,18 @@ jobs:
               })
               print("Build selected successfully")
 
-          # --- Step 4: Delete existing submission if present (from prior rejection) ---
-          print("Checking for existing submission to clear...")
+          # --- Step 4: Handle existing submission (from prior rejection) ---
+          # After a rejection, the old appStoreVersionSubmission blocks creating a new one.
+          # We must DELETE it first. Also check the version state — if REJECTED, we may need
+          # to transition it back to PREPARE_FOR_SUBMISSION.
+          print("Checking version state and clearing old submissions...")
+          ver_resp = requests.get(f"{base_url}/appStoreVersions/{version_id}", headers=headers,
+              params={"fields[appStoreVersions]": "appStoreState,versionString"})
+          if ver_resp.status_code == 200:
+              ver_state = ver_resp.json()["data"]["attributes"]["appStoreState"]
+              print(f"  Version state: {ver_state}")
+
+          # Delete any existing submission (required after rejection)
           sub_resp = requests.get(
               f"{base_url}/appStoreVersions/{version_id}/appStoreVersionSubmission",
               headers=headers
@@ -229,8 +239,18 @@ jobs:
                   print(f"  Found existing submission {sub_id} — deleting...")
                   del_resp = requests.delete(f"{base_url}/appStoreVersionSubmissions/{sub_id}", headers=headers)
                   print(f"  Delete result: {del_resp.status_code}")
+                  if del_resp.status_code in (200, 204):
+                      print("  Old submission deleted successfully")
+                      time.sleep(2)  # Give ASC a moment to update state
           elif sub_resp.status_code != 404:
-              print(f"  Submission check returned {sub_resp.status_code} (continuing anyway)")
+              print(f"  Submission check returned {sub_resp.status_code}")
+
+          # Re-check state after deletion
+          ver_resp2 = requests.get(f"{base_url}/appStoreVersions/{version_id}", headers=headers,
+              params={"fields[appStoreVersions]": "appStoreState"})
+          if ver_resp2.status_code == 200:
+              new_state = ver_resp2.json()["data"]["attributes"]["appStoreState"]
+              print(f"  Version state after cleanup: {new_state}")
 
           # --- Step 5: Submit for review ---
           print(f"Submitting version {version_id} for App Review...")
