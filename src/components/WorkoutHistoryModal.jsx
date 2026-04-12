@@ -102,6 +102,14 @@ export const WorkoutHistoryModal = ({ isOpen, onClose, workoutHistory }) => {
                             </div>
                           </div>
                         ))}
+                        {session.note && (
+                          <div className="mt-3 pt-2 border-t border-gray-800/20">
+                            <p className="text-[10px] text-gray-500 italic">{session.note}</p>
+                          </div>
+                        )}
+                        {session.duration > 0 && (
+                          <p className="text-[9px] text-gray-700 mt-2">{Math.floor(session.duration / 60)}m {session.duration % 60}s</p>
+                        )}
                       </div>
                     )}
                     {isExpanded && session.type === 'cardio' && session.cardioData && (

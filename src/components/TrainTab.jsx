@@ -17,6 +17,7 @@ export const TrainTab = ({
   const [restTime, setRestTime] = useState(90);
   const [restRemaining, setRestRemaining] = useState(0);
   const [workoutElapsed, setWorkoutElapsed] = useState(0);
+  const [workoutNote, setWorkoutNote] = useState('');
   const workoutStartRef = useRef(null);
   const restTimerRef = useRef(null);
 
@@ -92,8 +93,9 @@ export const TrainTab = ({
     // Detect PRs before saving
     const prs = detectPRs(activeSession.exercises, workoutHistory);
     const prNames = prs.map(p => p.exercise);
-    const log = { date: getLocalDate(), name: activeSession.name, type: 'strength', prs: prNames, exercises: activeSession.exercises.map(ex => ({ name: ex.name, sets: ex.sets.filter(s => s.weight && s.reps).map(s => ({ weight: s.weight, reps: s.reps })) })) };
+    const log = { date: getLocalDate(), name: activeSession.name, type: 'strength', prs: prNames, note: workoutNote || undefined, duration: workoutElapsed, exercises: activeSession.exercises.map(ex => ({ name: ex.name, sets: ex.sets.filter(s => s.weight && s.reps).map(s => ({ weight: s.weight, reps: s.reps })) })) };
     setWorkoutHistory([...workoutHistory, log]);
+    setWorkoutNote('');
     // Show PR celebration
     if (prs.length > 0 && setToast) {
       const prText = prs.map(p => `${p.exercise} ${p.weight}kg`).join(', ');
@@ -251,7 +253,10 @@ export const TrainTab = ({
         </div>
       ))}
       <ExerciseSearchInput onAdd={addExerciseToSession} customExercises={customExercises} onCreateExercise={onCreateExercise} />
-      <button onClick={finishWorkout} className="w-full accent-bg hover:opacity-90 text-white font-bold py-4 rounded-xl text-base uppercase tracking-wider mt-6 transition-all active:scale-[0.98] accent-glow">FINISH WORKOUT</button>
+      {/* Workout Notes */}
+      <textarea value={workoutNote} onChange={(e) => setWorkoutNote(e.target.value)} placeholder="Session notes (optional)..." rows={2}
+        className="w-full mt-4 bg-gray-900/50 border border-gray-800/50 rounded-xl p-3 text-sm text-white placeholder-gray-700 outline-none focus:accent-border resize-none"/>
+      <button onClick={finishWorkout} className="w-full accent-bg hover:opacity-90 text-white font-bold py-4 rounded-xl text-base uppercase tracking-wider mt-3 transition-all active:scale-[0.98] accent-glow">FINISH WORKOUT</button>
     </div>
   );
 };
