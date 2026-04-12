@@ -252,7 +252,29 @@ jobs:
               new_state = ver_resp2.json()["data"]["attributes"]["appStoreState"]
               print(f"  Version state after cleanup: {new_state}")
 
-          # --- Step 5: Submit for review ---
+          # --- Step 5: Force-delete any lingering submission via listing endpoint ---
+          print("Force-checking all submissions for this version...")
+          # Try listing submissions directly
+          all_subs = requests.get(f"{base_url}/appStoreVersionSubmissions",
+              headers=headers, params={"filter[appStoreVersion]": version_id})
+          if all_subs.status_code == 200:
+              for sub_item in all_subs.json().get("data", []):
+                  sid = sub_item["id"]
+                  print(f"  Found lingering submission {sid} — force deleting...")
+                  dr = requests.delete(f"{base_url}/appStoreVersionSubmissions/{sid}", headers=headers)
+                  print(f"  Delete: {dr.status_code}")
+                  time.sleep(2)
+
+          # Also try the singular relationship endpoint
+          sub_rel = requests.get(f"{base_url}/appStoreVersions/{version_id}/appStoreVersionSubmission", headers=headers)
+          if sub_rel.status_code == 200 and sub_rel.json().get("data"):
+              sid = sub_rel.json()["data"]["id"]
+              print(f"  Found submission via relationship: {sid} — deleting...")
+              dr = requests.delete(f"{base_url}/appStoreVersionSubmissions/{sid}", headers=headers)
+              print(f"  Delete: {dr.status_code}")
+              time.sleep(3)
+
+          # --- Step 6: Submit for review ---
           print(f"Submitting version {version_id} for App Review...")
           result, status, text = api_post("/appStoreVersionSubmissions", {
               "data": {
