@@ -5,6 +5,7 @@ import { getLocalDate } from '../helpers';
 
 export const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workoutHistory, setToast, userTargets, phase, aiCooldown, setAiCooldown, isPro, handlePremiumFeature, savedMeals, setShowWorkoutHistory }) => {
   const [localStat, setLocalStat] = useState('weight');
+  const [showPRBoard, setShowPRBoard] = useState(false);
   const [timeRange, setTimeRange] = useState('1W');
   const [focusedStatEntry, setFocusedStatEntry] = useState(null);
   const [ghostReport, setGhostReport] = useState(null);
@@ -61,6 +62,29 @@ export const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workou
       cells.push({ date: ds, count: workoutDates[ds] || 0, dow: d.getDay() });
     }
     return cells;
+  }, [workoutHistory]);
+
+  // All-time PR leaderboard
+  const prLeaderboard = useMemo(() => {
+    const prs = {};
+    workoutHistory.forEach(session => {
+      if (session.type === 'cardio' || !session.exercises) return;
+      session.exercises.forEach(ex => {
+        (ex.sets || []).forEach(s => {
+          const w = parseFloat(s.weight) || 0;
+          const r = parseFloat(s.reps) || 0;
+          if (w > 0 && r > 0) {
+            const key = ex.name;
+            if (!prs[key] || w > prs[key].weight || (w === prs[key].weight && r > prs[key].reps)) {
+              prs[key] = { weight: w, reps: r, date: session.date };
+            }
+          }
+        });
+      });
+    });
+    return Object.entries(prs)
+      .map(([name, data]) => ({ name, ...data }))
+      .sort((a, b) => b.weight - a.weight);
   }, [workoutHistory]);
 
   // Compute strength progress: best weight per exercise per session
@@ -227,6 +251,30 @@ export const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workou
                <div className="w-2 h-2 rounded-sm" style={{ backgroundColor: 'var(--accent)' }}/>
              </div>
              <span className="text-[8px] text-gray-700">More</span>
+           </div>
+         </div>
+       )}
+
+       {/* PR Leaderboard */}
+       {prLeaderboard.length > 0 && (
+         <div className="bg-gray-900/50 border border-gray-800/50 p-4 rounded-xl mb-6">
+           <div className="flex justify-between items-center mb-3">
+             <h3 className="text-gray-500 font-bold text-[10px] uppercase tracking-[0.2em] flex items-center gap-1"><Trophy size={10} className="text-yellow-400"/> All-Time PRs</h3>
+             <button onClick={() => setShowPRBoard(!showPRBoard)} className="text-[10px] text-gray-600 font-bold">{showPRBoard ? 'LESS' : `ALL (${prLeaderboard.length})`}</button>
+           </div>
+           <div className="space-y-1.5">
+             {(showPRBoard ? prLeaderboard : prLeaderboard.slice(0, 5)).map((pr, i) => (
+               <div key={pr.name} className="flex items-center justify-between">
+                 <div className="flex items-center gap-2">
+                   <span className={`text-[10px] font-black w-5 text-center ${i === 0 ? 'text-yellow-400' : i === 1 ? 'text-gray-300' : i === 2 ? 'text-orange-400' : 'text-gray-600'}`}>{i + 1}</span>
+                   <span className="text-white text-xs font-bold">{pr.name}</span>
+                 </div>
+                 <div className="flex items-center gap-2">
+                   <span className="text-white text-xs font-black">{pr.weight}<span className="text-gray-500 font-normal text-[10px]">kg</span></span>
+                   <span className="text-gray-500 text-[10px]">x{pr.reps}</span>
+                 </div>
+               </div>
+             ))}
            </div>
          </div>
        )}
