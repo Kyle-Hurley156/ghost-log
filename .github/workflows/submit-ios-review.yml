@@ -6,7 +6,7 @@ on:
       version:
         description: 'App version to submit (e.g. 4.1)'
         required: true
-        default: '4.1'
+        default: '4.2'
       build_first:
         description: 'Trigger a build before submitting?'
         required: false
