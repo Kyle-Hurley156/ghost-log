@@ -51,7 +51,7 @@ jobs:
       - name: Configure iOS Settings (Version & Compliance)
         run: |
           cd ios/App/App
-          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 4.2" Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 4.4" Info.plist
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ github.run_number }}" Info.plist
           /usr/libexec/PlistBuddy -c "Set :ITSAppUsesNonExemptEncryption false" Info.plist
           /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string 'GhostLog uses your camera to scan food labels and meals for macro tracking.'" Info.plist || /usr/libexec/PlistBuddy -c "Set :NSCameraUsageDescription 'GhostLog uses your camera to scan food labels and meals for macro tracking.'" Info.plist
