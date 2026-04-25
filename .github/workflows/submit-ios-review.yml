@@ -272,8 +272,8 @@ jobs:
           dr2 = requests.delete(f"{base_url}/appStoreVersionSubmissions/{version_id}", headers=headers)
           print(f"  Delete by version_id: {dr2.status_code}")
           if dr2.status_code in (200, 204):
-              print("  Phantom submission deleted!")
-              time.sleep(3)
+              print("  Phantom submission deleted! Waiting 10s for ASC to propagate...")
+              time.sleep(10)
 
           # Method 3: listing endpoint with filter
           all_subs = requests.get(f"{base_url}/appStoreVersionSubmissions",
@@ -283,35 +283,73 @@ jobs:
                   sid = sub_item["id"]
                   print(f"  Found via listing: {sid} — deleting...")
                   requests.delete(f"{base_url}/appStoreVersionSubmissions/{sid}", headers=headers)
-                  time.sleep(2)
+                  time.sleep(5)
 
-          # Method 4: if version was REJECTED, delete the version entirely and recreate
           ver_check = requests.get(f"{base_url}/appStoreVersions/{version_id}",
               headers=headers, params={"fields[appStoreVersions]": "appStoreState"})
           if ver_check.status_code == 200:
               state = ver_check.json()["data"]["attributes"]["appStoreState"]
               print(f"  Current state: {state}")
 
-          # --- Step 6: Submit for review ---
-          print(f"Submitting version {version_id} for App Review...")
-          result, status, text = api_post("/appStoreVersionSubmissions", {
-              "data": {
-                  "type": "appStoreVersionSubmissions",
-                  "relationships": {
-                      "appStoreVersion": {
-                          "data": {"type": "appStoreVersions", "id": version_id}
+          # --- Step 6: Submit for review (with retry) ---
+          submitted = False
+          for attempt in range(3):
+              print(f"Submitting version {version_id} for App Review (attempt {attempt + 1}/3)...")
+              result, status, text = api_post("/appStoreVersionSubmissions", {
+                  "data": {
+                      "type": "appStoreVersionSubmissions",
+                      "relationships": {
+                          "appStoreVersion": {
+                              "data": {"type": "appStoreVersions", "id": version_id}
+                          }
                       }
                   }
-              }
-          })
+              })
 
-          if result is None:
+              if result is not None:
+                  submitted = True
+                  break
+
+              # If submission fails with phantom submission error, try deleting version and recreating
+              if attempt == 0 and "does not allow 'CREATE'" in str(text):
+                  print("")
+                  print("  Phantom submission still blocking. Deleting version and recreating...")
+                  del_ver = requests.delete(f"{base_url}/appStoreVersions/{version_id}", headers=headers)
+                  print(f"  Delete version: {del_ver.status_code}")
+                  if del_ver.status_code in (200, 204):
+                      print("  Version deleted. Waiting 10s then recreating...")
+                      time.sleep(10)
+                      create_result, cs, ct = api_post("/appStoreVersions", {
+                          "data": {
+                              "type": "appStoreVersions",
+                              "attributes": {"platform": "IOS", "versionString": version},
+                              "relationships": {
+                                  "app": {"data": {"type": "apps", "id": app_id}},
+                                  "build": {"data": {"type": "builds", "id": build_id}}
+                              }
+                          }
+                      })
+                      if create_result:
+                          version_id = create_result["data"]["id"]
+                          print(f"  New version created: {version_id}")
+                      else:
+                          print(f"  Failed to recreate version: {ct}")
+                  else:
+                      print(f"  Could not delete version ({del_ver.status_code}), waiting 15s and retrying...")
+                      time.sleep(15)
+              elif attempt < 2:
+                  wait = 15 * (attempt + 1)
+                  print(f"  Waiting {wait}s before retry...")
+                  time.sleep(wait)
+
+          if not submitted:
               print("")
-              print("Submission failed. Common reasons:")
+              print("Submission failed after 3 attempts. Common reasons:")
               print("  - Missing screenshots or app description")
               print("  - Missing privacy policy URL")
               print("  - Missing content rating / age rating")
               print("  - Export compliance not answered")
+              print("  - Phantom submission from prior rejection still blocking")
               print("")
               print("Check App Store Connect for specific issues.")
               try:
