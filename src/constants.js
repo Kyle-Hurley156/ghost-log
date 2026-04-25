@@ -1,4 +1,4 @@
-export const APP_VERSION = "4.4";
+export const APP_VERSION = "4.4.1";
 
 export const FIREBASE_CONFIG = {
   apiKey: import.meta.env?.VITE_FIREBASE_API_KEY || "AIzaSyAH3L6UcFaXos3AT3o8W8EHsgWBbL8_ZA4",
