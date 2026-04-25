@@ -143,208 +143,108 @@ jobs:
               ver = v["attributes"]["versionString"]
               print(f"  Found version {ver} in state: {state}")
 
-          # Strategy 1: Find an editable version matching our target version
+          # STRATEGY: Delete ALL existing editable versions to clear phantom submissions,
+          # then create a fresh version. This avoids the phantom submission bug entirely.
           for v in all_versions["data"]:
               state = v["attributes"]["appStoreState"]
               ver = v["attributes"]["versionString"]
-              if state in editable_states and ver == version:
-                  version_id = v["id"]
-                  print(f"  -> Using matching version {ver} (ID: {version_id})")
-                  break
+              if state in editable_states:
+                  vid = v["id"]
+                  print(f"  Clearing editable version {ver} ({state}, ID: {vid})...")
+                  # First try to delete any submission on it
+                  sub_del = requests.delete(f"{base_url}/appStoreVersionSubmissions/{vid}", headers=headers)
+                  print(f"    Delete submission by version_id: {sub_del.status_code}")
+                  sub_rel = requests.get(f"{base_url}/appStoreVersions/{vid}/appStoreVersionSubmission", headers=headers)
+                  if sub_rel.status_code == 200 and sub_rel.json().get("data"):
+                      sid = sub_rel.json()["data"]["id"]
+                      requests.delete(f"{base_url}/appStoreVersionSubmissions/{sid}", headers=headers)
+                      print(f"    Deleted submission {sid}")
+                  # Now delete the version itself
+                  vdel = requests.delete(f"{base_url}/appStoreVersions/{vid}", headers=headers)
+                  print(f"    Delete version: {vdel.status_code}")
+                  if vdel.status_code in (200, 204):
+                      print(f"    Version {ver} deleted successfully")
+                  else:
+                      print(f"    Could not delete version {ver} ({vdel.status_code})")
+                      # Try to update version string out of the way
+                      try:
+                          api_patch(f"/appStoreVersions/{vid}", {
+                              "data": {
+                                  "type": "appStoreVersions",
+                                  "id": vid,
+                                  "attributes": {"versionString": f"0.0.{int(time.time()) % 10000}"}
+                              }
+                          })
+                          print(f"    Updated version string out of the way")
+                      except:
+                          pass
 
-          # Strategy 2: Reuse a PREPARE_FOR_SUBMISSION version with wrong version string
-          if not version_id:
-              for v in all_versions["data"]:
-                  state = v["attributes"]["appStoreState"]
-                  ver = v["attributes"]["versionString"]
-                  if state == "PREPARE_FOR_SUBMISSION" and ver != version:
-                      version_id = v["id"]
-                      print(f"  -> Updating version {ver} to {version} (ID: {version_id})")
-                      api_patch(f"/appStoreVersions/{version_id}", {
-                          "data": {
-                              "type": "appStoreVersions",
-                              "id": version_id,
-                              "attributes": {"versionString": version}
-                          }
-                      })
-                      print(f"  Version string updated to {version}")
-                      break
-
-          # Strategy 3: Reuse REJECTED version by updating its version string
-          if not version_id:
-              for v in all_versions["data"]:
-                  state = v["attributes"]["appStoreState"]
-                  ver = v["attributes"]["versionString"]
-                  if state in ["REJECTED", "DEVELOPER_REJECTED", "METADATA_REJECTED"]:
-                      version_id = v["id"]
-                      print(f"  -> Reusing {state} version {ver}, updating to {version} (ID: {version_id})")
-                      api_patch(f"/appStoreVersions/{version_id}", {
-                          "data": {
-                              "type": "appStoreVersions",
-                              "id": version_id,
-                              "attributes": {"versionString": version}
-                          }
-                      })
-                      print(f"  Version string updated to {version}")
-                      break
-
-          # Strategy 4: Create fresh if nothing reusable found
-          if not version_id:
-              print(f"Creating new appStoreVersion {version}...")
-              result, status, text = api_post("/appStoreVersions", {
-                  "data": {
-                      "type": "appStoreVersions",
-                      "attributes": {"platform": "IOS", "versionString": version},
-                      "relationships": {
-                          "app": {"data": {"type": "apps", "id": app_id}},
-                          "build": {"data": {"type": "builds", "id": build_id}}
-                      }
+          time.sleep(5)
+          print(f"Creating fresh appStoreVersion {version}...")
+          result, status, text = api_post("/appStoreVersions", {
+              "data": {
+                  "type": "appStoreVersions",
+                  "attributes": {"platform": "IOS", "versionString": version},
+                  "relationships": {
+                      "app": {"data": {"type": "apps", "id": app_id}},
+                      "build": {"data": {"type": "builds", "id": build_id}}
                   }
+              }
+          })
+          if result is None:
+              print(f"Failed to create version {version}.")
+              print(f"Response: {text}")
+              # If creation fails, maybe a version still exists — try to find and use it
+              all_v2 = api_get(f"/apps/{app_id}/appStoreVersions", {
+                  "filter[platform]": "IOS",
+                  "fields[appStoreVersions]": "versionString,appStoreState",
+                  "limit": "10"
               })
-              if result is None:
-                  print(f"Failed to create version {version}.")
-                  print("Check App Store Connect for blocking versions or missing metadata.")
+              for v in all_v2["data"]:
+                  state = v["attributes"]["appStoreState"]
+                  ver = v["attributes"]["versionString"]
+                  if state in editable_states:
+                      version_id = v["id"]
+                      print(f"  Falling back to existing version {ver} (ID: {version_id})")
+                      if ver != version:
+                          api_patch(f"/appStoreVersions/{version_id}", {
+                              "data": {
+                                  "type": "appStoreVersions",
+                                  "id": version_id,
+                                  "attributes": {"versionString": version}
+                              }
+                          })
+                      break
+              if not version_id:
+                  print("No usable version found. Check App Store Connect manually.")
                   sys.exit(1)
+          else:
               version_id = result["data"]["id"]
               print(f"Created appStoreVersion: {version_id}")
 
           # Select the build for whichever version we ended up with
-          if version_id:
-              print(f"Selecting build #{build_number} for version...")
-              api_patch(f"/appStoreVersions/{version_id}/relationships/build", {
-                  "data": {"type": "builds", "id": build_id}
-              })
-              print("Build selected successfully")
+          print(f"Selecting build #{build_number} for version {version_id}...")
+          api_patch(f"/appStoreVersions/{version_id}/relationships/build", {
+              "data": {"type": "builds", "id": build_id}
+          })
+          print("Build selected successfully")
 
-          # --- Step 4: Handle existing submission (from prior rejection) ---
-          # After a rejection, the old appStoreVersionSubmission blocks creating a new one.
-          # We must DELETE it first. Also check the version state — if REJECTED, we may need
-          # to transition it back to PREPARE_FOR_SUBMISSION.
-          print("Checking version state and clearing old submissions...")
-          ver_resp = requests.get(f"{base_url}/appStoreVersions/{version_id}", headers=headers,
-              params={"fields[appStoreVersions]": "appStoreState,versionString"})
-          if ver_resp.status_code == 200:
-              ver_state = ver_resp.json()["data"]["attributes"]["appStoreState"]
-              print(f"  Version state: {ver_state}")
-
-          # Delete any existing submission (required after rejection)
-          sub_resp = requests.get(
-              f"{base_url}/appStoreVersions/{version_id}/appStoreVersionSubmission",
-              headers=headers
-          )
-          if sub_resp.status_code == 200:
-              sub_data = sub_resp.json()
-              if sub_data.get("data"):
-                  sub_id = sub_data["data"]["id"]
-                  print(f"  Found existing submission {sub_id} — deleting...")
-                  del_resp = requests.delete(f"{base_url}/appStoreVersionSubmissions/{sub_id}", headers=headers)
-                  print(f"  Delete result: {del_resp.status_code}")
-                  if del_resp.status_code in (200, 204):
-                      print("  Old submission deleted successfully")
-                      time.sleep(2)  # Give ASC a moment to update state
-          elif sub_resp.status_code != 404:
-              print(f"  Submission check returned {sub_resp.status_code}")
-
-          # Re-check state after deletion
-          ver_resp2 = requests.get(f"{base_url}/appStoreVersions/{version_id}", headers=headers,
-              params={"fields[appStoreVersions]": "appStoreState"})
-          if ver_resp2.status_code == 200:
-              new_state = ver_resp2.json()["data"]["attributes"]["appStoreState"]
-              print(f"  Version state after cleanup: {new_state}")
-
-          # --- Step 5: Nuke any lingering submission ---
-          # After rejection, ASC keeps a phantom submission that blocks CREATE.
-          # Try every known method to find and delete it.
-          print("Nuking any lingering submissions...")
-
-          # Method 1: relationship endpoint
-          sub_rel = requests.get(f"{base_url}/appStoreVersions/{version_id}/appStoreVersionSubmission", headers=headers)
-          print(f"  Relationship GET: {sub_rel.status_code}")
-          if sub_rel.status_code == 200 and sub_rel.json().get("data"):
-              sid = sub_rel.json()["data"]["id"]
-              print(f"  Found via relationship: {sid} — deleting...")
-              dr = requests.delete(f"{base_url}/appStoreVersionSubmissions/{sid}", headers=headers)
-              print(f"  Delete: {dr.status_code}")
-              time.sleep(3)
-
-          # Method 2: try version_id as submission ID (some API versions reuse the same ID)
-          print(f"  Trying version_id as submission ID...")
-          dr2 = requests.delete(f"{base_url}/appStoreVersionSubmissions/{version_id}", headers=headers)
-          print(f"  Delete by version_id: {dr2.status_code}")
-          if dr2.status_code in (200, 204):
-              print("  Phantom submission deleted! Waiting 10s for ASC to propagate...")
-              time.sleep(10)
-
-          # Method 3: listing endpoint with filter
-          all_subs = requests.get(f"{base_url}/appStoreVersionSubmissions",
-              headers=headers, params={"filter[appStoreVersion]": version_id})
-          if all_subs.status_code == 200:
-              for sub_item in all_subs.json().get("data", []):
-                  sid = sub_item["id"]
-                  print(f"  Found via listing: {sid} — deleting...")
-                  requests.delete(f"{base_url}/appStoreVersionSubmissions/{sid}", headers=headers)
-                  time.sleep(5)
-
-          ver_check = requests.get(f"{base_url}/appStoreVersions/{version_id}",
-              headers=headers, params={"fields[appStoreVersions]": "appStoreState"})
-          if ver_check.status_code == 200:
-              state = ver_check.json()["data"]["attributes"]["appStoreState"]
-              print(f"  Current state: {state}")
-
-          # --- Step 6: Submit for review (with retry) ---
-          submitted = False
-          for attempt in range(3):
-              print(f"Submitting version {version_id} for App Review (attempt {attempt + 1}/3)...")
-              result, status, text = api_post("/appStoreVersionSubmissions", {
-                  "data": {
-                      "type": "appStoreVersionSubmissions",
-                      "relationships": {
-                          "appStoreVersion": {
-                              "data": {"type": "appStoreVersions", "id": version_id}
-                          }
+          # --- Step 4: Submit for review ---
+          print(f"Submitting version {version_id} for App Review...")
+          result, status, text = api_post("/appStoreVersionSubmissions", {
+              "data": {
+                  "type": "appStoreVersionSubmissions",
+                  "relationships": {
+                      "appStoreVersion": {
+                          "data": {"type": "appStoreVersions", "id": version_id}
                       }
                   }
-              })
+              }
+          })
 
-              if result is not None:
-                  submitted = True
-                  break
-
-              # If submission fails with phantom submission error, try deleting version and recreating
-              if attempt == 0 and "does not allow 'CREATE'" in str(text):
-                  print("")
-                  print("  Phantom submission still blocking. Deleting version and recreating...")
-                  del_ver = requests.delete(f"{base_url}/appStoreVersions/{version_id}", headers=headers)
-                  print(f"  Delete version: {del_ver.status_code}")
-                  if del_ver.status_code in (200, 204):
-                      print("  Version deleted. Waiting 10s then recreating...")
-                      time.sleep(10)
-                      create_result, cs, ct = api_post("/appStoreVersions", {
-                          "data": {
-                              "type": "appStoreVersions",
-                              "attributes": {"platform": "IOS", "versionString": version},
-                              "relationships": {
-                                  "app": {"data": {"type": "apps", "id": app_id}},
-                                  "build": {"data": {"type": "builds", "id": build_id}}
-                              }
-                          }
-                      })
-                      if create_result:
-                          version_id = create_result["data"]["id"]
-                          print(f"  New version created: {version_id}")
-                      else:
-                          print(f"  Failed to recreate version: {ct}")
-                  else:
-                      print(f"  Could not delete version ({del_ver.status_code}), waiting 15s and retrying...")
-                      time.sleep(15)
-              elif attempt < 2:
-                  wait = 15 * (attempt + 1)
-                  print(f"  Waiting {wait}s before retry...")
-                  time.sleep(wait)
-
-          if not submitted:
+          if result is None:
               print("")
-              print("Submission failed after 3 attempts. Common reasons:")
+              print("Submission failed. Common reasons:")
               print("  - Missing screenshots or app description")
               print("  - Missing privacy policy URL")
               print("  - Missing content rating / age rating")
