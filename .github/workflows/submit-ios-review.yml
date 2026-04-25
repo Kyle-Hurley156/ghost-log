@@ -143,82 +143,41 @@ jobs:
               ver = v["attributes"]["versionString"]
               print(f"  Found version {ver} in state: {state}")
 
-          # STRATEGY: Delete ALL existing editable versions to clear phantom submissions,
-          # then create a fresh version. This avoids the phantom submission bug entirely.
+          # Find an editable version to use
           for v in all_versions["data"]:
               state = v["attributes"]["appStoreState"]
               ver = v["attributes"]["versionString"]
               if state in editable_states:
-                  vid = v["id"]
-                  print(f"  Clearing editable version {ver} ({state}, ID: {vid})...")
-                  # First try to delete any submission on it
-                  sub_del = requests.delete(f"{base_url}/appStoreVersionSubmissions/{vid}", headers=headers)
-                  print(f"    Delete submission by version_id: {sub_del.status_code}")
-                  sub_rel = requests.get(f"{base_url}/appStoreVersions/{vid}/appStoreVersionSubmission", headers=headers)
-                  if sub_rel.status_code == 200 and sub_rel.json().get("data"):
-                      sid = sub_rel.json()["data"]["id"]
-                      requests.delete(f"{base_url}/appStoreVersionSubmissions/{sid}", headers=headers)
-                      print(f"    Deleted submission {sid}")
-                  # Now delete the version itself
-                  vdel = requests.delete(f"{base_url}/appStoreVersions/{vid}", headers=headers)
-                  print(f"    Delete version: {vdel.status_code}")
-                  if vdel.status_code in (200, 204):
-                      print(f"    Version {ver} deleted successfully")
-                  else:
-                      print(f"    Could not delete version {ver} ({vdel.status_code})")
-                      # Try to update version string out of the way
-                      try:
-                          api_patch(f"/appStoreVersions/{vid}", {
-                              "data": {
-                                  "type": "appStoreVersions",
-                                  "id": vid,
-                                  "attributes": {"versionString": f"0.0.{int(time.time()) % 10000}"}
-                              }
-                          })
-                          print(f"    Updated version string out of the way")
-                      except:
-                          pass
+                  version_id = v["id"]
+                  print(f"  -> Using version {ver} in state {state} (ID: {version_id})")
+                  # Update version string if needed
+                  if ver != version:
+                      print(f"  Updating version string from {ver} to {version}...")
+                      api_patch(f"/appStoreVersions/{version_id}", {
+                          "data": {
+                              "type": "appStoreVersions",
+                              "id": version_id,
+                              "attributes": {"versionString": version}
+                          }
+                      })
+                  break
 
-          time.sleep(5)
-          print(f"Creating fresh appStoreVersion {version}...")
-          result, status, text = api_post("/appStoreVersions", {
-              "data": {
-                  "type": "appStoreVersions",
-                  "attributes": {"platform": "IOS", "versionString": version},
-                  "relationships": {
-                      "app": {"data": {"type": "apps", "id": app_id}},
-                      "build": {"data": {"type": "builds", "id": build_id}}
+          # If no editable version exists, create one
+          if not version_id:
+              print(f"Creating new appStoreVersion {version}...")
+              result, status, text = api_post("/appStoreVersions", {
+                  "data": {
+                      "type": "appStoreVersions",
+                      "attributes": {"platform": "IOS", "versionString": version},
+                      "relationships": {
+                          "app": {"data": {"type": "apps", "id": app_id}},
+                          "build": {"data": {"type": "builds", "id": build_id}}
+                      }
                   }
-              }
-          })
-          if result is None:
-              print(f"Failed to create version {version}.")
-              print(f"Response: {text}")
-              # If creation fails, maybe a version still exists — try to find and use it
-              all_v2 = api_get(f"/apps/{app_id}/appStoreVersions", {
-                  "filter[platform]": "IOS",
-                  "fields[appStoreVersions]": "versionString,appStoreState",
-                  "limit": "10"
               })
-              for v in all_v2["data"]:
-                  state = v["attributes"]["appStoreState"]
-                  ver = v["attributes"]["versionString"]
-                  if state in editable_states:
-                      version_id = v["id"]
-                      print(f"  Falling back to existing version {ver} (ID: {version_id})")
-                      if ver != version:
-                          api_patch(f"/appStoreVersions/{version_id}", {
-                              "data": {
-                                  "type": "appStoreVersions",
-                                  "id": version_id,
-                                  "attributes": {"versionString": version}
-                              }
-                          })
-                      break
-              if not version_id:
-                  print("No usable version found. Check App Store Connect manually.")
+              if result is None:
+                  print(f"Failed to create version: {text}")
                   sys.exit(1)
-          else:
               version_id = result["data"]["id"]
               print(f"Created appStoreVersion: {version_id}")
 
@@ -229,8 +188,28 @@ jobs:
           })
           print("Build selected successfully")
 
-          # --- Step 4: Submit for review ---
-          print(f"Submitting version {version_id} for App Review...")
+          # --- Step 4: Try to clear any phantom submission ---
+          print("Checking for phantom submissions to clear...")
+          # Try all known methods to delete phantom submissions
+          for del_id in [version_id]:
+              sub_rel = requests.get(f"{base_url}/appStoreVersions/{del_id}/appStoreVersionSubmission", headers=headers)
+              if sub_rel.status_code == 200 and sub_rel.json().get("data"):
+                  sid = sub_rel.json()["data"]["id"]
+                  print(f"  Found submission {sid} via relationship — deleting...")
+                  dr = requests.delete(f"{base_url}/appStoreVersionSubmissions/{sid}", headers=headers)
+                  print(f"  Delete: {dr.status_code}")
+                  time.sleep(5)
+              # Also try version_id as submission ID
+              dr2 = requests.delete(f"{base_url}/appStoreVersionSubmissions/{del_id}", headers=headers)
+              if dr2.status_code in (200, 204):
+                  print(f"  Deleted phantom submission by version_id: {dr2.status_code}")
+                  time.sleep(5)
+              else:
+                  print(f"  No phantom found (or already gone): {dr2.status_code}")
+
+          # --- Step 5: Submit for review ---
+          # Try the v1 appStoreVersionSubmissions endpoint first
+          print(f"Submitting version {version_id} for App Review (v1 API)...")
           result, status, text = api_post("/appStoreVersionSubmissions", {
               "data": {
                   "type": "appStoreVersionSubmissions",
@@ -242,20 +221,49 @@ jobs:
               }
           })
 
+          # If v1 fails with phantom submission error, try v2 API (appStoreReviewSubmissions)
+          if result is None and "does not allow 'CREATE'" in str(text):
+              print("")
+              print("v1 API blocked by phantom submission. Trying v2 review submission API...")
+              # The v2 endpoint uses appStoreReviewSubmissions which submits the entire app version
+              v2_result = requests.post(f"{base_url}/appStoreReviewSubmissions", headers=headers, json={
+                  "data": {
+                      "type": "appStoreReviewSubmissions",
+                      "relationships": {
+                          "appStoreVersion": {
+                              "data": {"type": "appStoreVersions", "id": version_id}
+                          }
+                      }
+                  }
+              })
+              print(f"  v2 API response: {v2_result.status_code}")
+              if v2_result.status_code in (200, 201):
+                  result = v2_result.json()
+                  print("  v2 submission succeeded!")
+              else:
+                  print(f"  v2 API also failed: {v2_result.text}")
+
           if result is None:
               print("")
-              print("Submission failed. Common reasons:")
-              print("  - Missing screenshots or app description")
-              print("  - Missing privacy policy URL")
-              print("  - Missing content rating / age rating")
-              print("  - Export compliance not answered")
-              print("  - Phantom submission from prior rejection still blocking")
+              print("=" * 50)
+              print("AUTOMATED SUBMISSION FAILED")
+              print("=" * 50)
               print("")
-              print("Check App Store Connect for specific issues.")
+              print("The build was uploaded successfully but the phantom")
+              print("submission from the prior rejection blocks the API.")
+              print("")
+              print("MANUAL FIX REQUIRED:")
+              print("1. Go to https://appstoreconnect.apple.com")
+              print("2. Navigate to GhostLog > App Store tab")
+              print("3. Select the version in 'Prepare for Submission'")
+              print("4. Ensure build #" + build_number + " is selected")
+              print("5. Click 'Submit for Review' in the UI")
+              print("")
+              print("The UI can bypass the phantom submission bug.")
               try:
                   detail = json.loads(text)
                   for err in detail.get("errors", []):
-                      print(f"  Error: {err.get('detail', err.get('title', 'Unknown'))}")
+                      print(f"  API Error: {err.get('detail', err.get('title', 'Unknown'))}")
               except:
                   pass
               sys.exit(1)
