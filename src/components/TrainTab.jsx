@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Plus, Check, X, Edit3, Trash2, GripVertical, Sparkles, AlertTriangle, Activity, HeartPulse, Dumbbell, Timer, RotateCcw } from 'lucide-react';
 import { calculateReadiness, calculateSetTarget, getLocalDate, detectPRs } from '../helpers';
 import { ExerciseSearchInput } from './ExerciseSearchInput';
-import { hapticLight, hapticSuccess, hapticMedium } from '../services/haptics';
+import { hapticLight, hapticSuccess, hapticMedium, hapticHeavy } from '../services/haptics';
 
 export const TrainTab = ({
   workoutSplits, setWorkoutSplits, workoutHistory, setWorkoutHistory,
@@ -16,6 +16,7 @@ export const TrainTab = ({
   const [readinessScore, setReadinessScore] = useState(50);
   const [restTime, setRestTime] = useState(90);
   const [restRemaining, setRestRemaining] = useState(0);
+  const [restJustFinished, setRestJustFinished] = useState(false);
   const [workoutElapsed, setWorkoutElapsed] = useState(0);
   const [workoutNote, setWorkoutNote] = useState('');
   const workoutStartRef = useRef(null);
@@ -36,7 +37,17 @@ export const TrainTab = ({
     if (restRemaining <= 0) { clearInterval(restTimerRef.current); return; }
     restTimerRef.current = setInterval(() => {
       setRestRemaining(prev => {
-        if (prev <= 1) { hapticMedium(); return 0; }
+        if (prev <= 1) {
+          // Fire strong haptic pattern when rest is done
+          hapticHeavy();
+          setTimeout(() => hapticSuccess(), 200);
+          // Flash the rest timer green briefly
+          setRestJustFinished(true);
+          setTimeout(() => setRestJustFinished(false), 2000);
+          return 0;
+        }
+        // Gentle tick at 10s remaining
+        if (prev === 11) hapticLight();
         return prev - 1;
       });
     }, 1000);
@@ -213,14 +224,16 @@ export const TrainTab = ({
 
       {/* Rest Timer + Workout Clock */}
       <div className="flex gap-2 mb-4">
-        <div className={`flex-1 rounded-xl p-3 border flex items-center justify-between ${restRemaining > 0 ? 'bg-blue-900/20 border-blue-500/30' : 'bg-gray-900/50 border-gray-800/50'}`}>
+        <div className={`flex-1 rounded-xl p-3 border flex items-center justify-between transition-all duration-300 ${restJustFinished ? 'bg-green-900/30 border-green-500/40' : restRemaining > 0 ? (restRemaining <= 10 ? 'bg-orange-900/20 border-orange-500/30' : 'bg-blue-900/20 border-blue-500/30') : 'bg-gray-900/50 border-gray-800/50'}`}>
           <div className="flex items-center gap-2">
-            <Timer size={14} className={restRemaining > 0 ? 'text-blue-400' : 'text-gray-600'}/>
+            <Timer size={14} className={restJustFinished ? 'text-green-400' : restRemaining > 0 ? (restRemaining <= 10 ? 'text-orange-400' : 'text-blue-400') : 'text-gray-600'}/>
             <span className="text-[10px] text-gray-500 uppercase font-bold">Rest</span>
           </div>
           <div className="flex items-center gap-2">
-            {restRemaining > 0 ? (
-              <span className="text-lg font-black text-blue-400 tabular-nums">{formatTime(restRemaining)}</span>
+            {restJustFinished ? (
+              <span className="text-sm font-black text-green-400 animate-pulse">GO!</span>
+            ) : restRemaining > 0 ? (
+              <span className={`text-lg font-black tabular-nums ${restRemaining <= 10 ? 'text-orange-400' : 'text-blue-400'}`}>{formatTime(restRemaining)}</span>
             ) : (
               <span className="text-xs text-gray-600 font-bold">Ready</span>
             )}

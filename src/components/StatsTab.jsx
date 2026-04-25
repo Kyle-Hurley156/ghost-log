@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { Edit3, Loader2, Lock, Dumbbell, HeartPulse, Sparkles, Download, TrendingUp, Trophy, ChevronRight, Flame } from 'lucide-react';
 import { API_URL } from '../constants';
-import { getLocalDate } from '../helpers';
+import { getLocalDate, estimate1RM } from '../helpers';
+import { BodyWeightTracker } from './BodyWeightTracker';
 
-export const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workoutHistory, setToast, userTargets, phase, aiCooldown, setAiCooldown, isPro, handlePremiumFeature, savedMeals, setShowWorkoutHistory }) => {
+export const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workoutHistory, setToast, userTargets, phase, aiCooldown, setAiCooldown, isPro, handlePremiumFeature, savedMeals, setShowWorkoutHistory, goalWeight, onSetGoalWeight, requestPrompt }) => {
   const [localStat, setLocalStat] = useState('weight');
   const [showPRBoard, setShowPRBoard] = useState(false);
   const [timeRange, setTimeRange] = useState('1W');
@@ -224,6 +225,9 @@ export const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workou
          </div>
        </div>
 
+       {/* Body Weight Tracker */}
+       <BodyWeightTracker statsHistory={statsHistory} goalWeight={goalWeight} onSetGoalWeight={onSetGoalWeight} requestPrompt={requestPrompt} />
+
        {/* Streak Heatmap */}
        {workoutHistory.length > 0 && (
          <div className="bg-gray-900/50 border border-gray-800/50 p-4 rounded-xl mb-6">
@@ -272,6 +276,7 @@ export const StatsTab = ({ statsHistory, setLogDate, setShowDailyCheckin, workou
                  <div className="flex items-center gap-2">
                    <span className="text-white text-xs font-black">{pr.weight}<span className="text-gray-500 font-normal text-[10px]">kg</span></span>
                    <span className="text-gray-500 text-[10px]">x{pr.reps}</span>
+                   {pr.reps > 1 && <span className="text-yellow-400/60 text-[9px] font-bold">~{estimate1RM(pr.weight, pr.reps)}kg</span>}
                  </div>
                </div>
              ))}

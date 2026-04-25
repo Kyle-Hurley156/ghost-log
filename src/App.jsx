@@ -259,6 +259,7 @@ export default function App() {
   const [dailyLog, setDailyLog] = useStickyState([], 'ghost_daily_log');
   const [userTargets, setUserTargets] = useStickyState(INITIAL_TARGETS, 'ghost_targets');
   const [customExercises, setCustomExercises] = useStickyState([], 'ghost_custom_exercises');
+  const [goalWeight, setGoalWeight] = useStickyState(null, 'ghost_goal_weight');
 
   const [logDate, setLogDate] = useState(getLocalDate());
   const [dailyStatsInput, setDailyStatsInput] = useState({ weight: '', steps: '', water: '', stress: 3, fatigue: 3, sleepHours: '', sleepQuality: 3, activity: 3 });
@@ -284,6 +285,7 @@ export default function App() {
         if (data.userTargets) setUserTargets(data.userTargets);
         if (data.phase) setPhase(data.phase);
         if (data.customExercises) setCustomExercises(data.customExercises);
+        if (data.goalWeight !== undefined) setGoalWeight(data.goalWeight);
       }
       // Only enable sync engine after successful cloud load.
       // If we set dataLoaded on failure, the sync engine would push stale
@@ -305,6 +307,7 @@ export default function App() {
             if (data.userTargets) setUserTargets(data.userTargets);
             if (data.phase) setPhase(data.phase);
             if (data.customExercises) setCustomExercises(data.customExercises);
+            if (data.goalWeight !== undefined) setGoalWeight(data.goalWeight);
           }
           setDataLoaded(true);
         } catch (retryErr) {
@@ -908,6 +911,7 @@ export default function App() {
           dailyLog,
           userTargets,
           customExercises,
+          goalWeight,
           phase
         }, { merge: true });
 
@@ -920,7 +924,7 @@ export default function App() {
 
     const timer = setTimeout(syncDataToCloud, 3000);
     return () => clearTimeout(timer);
-  }, [workoutSplits, savedMeals, statsHistory, workoutHistory, dailyLog, userTargets, customExercises, phase, cloudUser, dataLoaded]);
+  }, [workoutSplits, savedMeals, statsHistory, workoutHistory, dailyLog, userTargets, customExercises, goalWeight, phase, cloudUser, dataLoaded]);
 
   // --- PREMIUM LOCK GUARDS ---
   const handlePremiumFeature = (action) => {
@@ -946,11 +950,14 @@ export default function App() {
       return;
     }
 
+    const timeout = setTimeout(() => {
+      setIsPaywallLoading(false);
+      setToastMsg("Purchase timed out. Check your connection and try again.");
+    }, 30000);
     try {
       const RC = await getRevenueCat();
       const offerings = await RC.getOfferings();
       if (offerings.current !== null && offerings.current.availablePackages.length !== 0) {
-        // Use .monthly if available, otherwise fall back to first available package
         const pkg = offerings.current.monthly || offerings.current.availablePackages[0];
         const { customerInfo } = await RC.purchasePackage({ aPackage: pkg });
         if (typeof customerInfo?.entitlements?.active['pro'] !== "undefined") {
@@ -959,11 +966,12 @@ export default function App() {
           setToastMsg("Welcome to GhostLog Pro!");
         }
       } else {
-        setToastMsg("No packages configured in RevenueCat yet.");
+        setToastMsg("No subscription packages available. Try again later.");
       }
     } catch (e) {
       if (!e.userCancelled) setToastMsg("Purchase failed. Try again.");
     }
+    clearTimeout(timeout);
     setIsPaywallLoading(false);
   };
 
@@ -1158,7 +1166,7 @@ export default function App() {
 
            {activeTab === 'eat' && <div className="p-4"><EatTab savedMeals={savedMeals} dailyLog={dailyLog} mealEditMode={mealEditMode} setMealEditMode={setMealEditMode} setShowAddMealModal={setShowAddMealModal} setShowGhostChefModal={setShowGhostChefModal} logMeal={logMeal} deleteSavedMeal={deleteSavedMeal} deleteLogItem={deleteLogItem} getMealMacros={(m)=>m.ingredients.reduce((a,i)=>({cal:a.cal+i.cal,p:a.p+i.p,c:a.c+i.c,f:a.f+i.f}),{cal:0,p:0,c:0,f:0})} dragItem={dragItem} dragOverItem={dragOverItem} handleSortMeals={handleSortMeals} requestConfirm={requestConfirm} userTargets={currentTargets} dailyStats={dailyStatsInput} isPro={isPro} handlePremiumFeature={handlePremiumFeature} waterCount={parseFloat(dailyStatsInput.water) || 0} setWaterCount={(n) => setDailyStatsInput(prev => ({...prev, water: String(n)}))}/></div>}
 
-           {activeTab === 'stats' && <div className="p-4"><StatsTab statsHistory={statsHistory} setLogDate={setLogDate} setShowDailyCheckin={setShowDailyCheckin} workoutHistory={workoutHistory} setToast={setToastMsg} userTargets={currentTargets} phase={phase} aiCooldown={aiCooldown} setAiCooldown={setAiCooldown} isPro={isPro} handlePremiumFeature={handlePremiumFeature} savedMeals={savedMeals} setShowWorkoutHistory={setShowWorkoutHistory} /></div>}
+           {activeTab === 'stats' && <div className="p-4"><StatsTab statsHistory={statsHistory} setLogDate={setLogDate} setShowDailyCheckin={setShowDailyCheckin} workoutHistory={workoutHistory} setToast={setToastMsg} userTargets={currentTargets} phase={phase} aiCooldown={aiCooldown} setAiCooldown={setAiCooldown} isPro={isPro} handlePremiumFeature={handlePremiumFeature} savedMeals={savedMeals} setShowWorkoutHistory={setShowWorkoutHistory} goalWeight={goalWeight} onSetGoalWeight={setGoalWeight} requestPrompt={requestPrompt} /></div>}
         </div>
 
         {/* BOTTOM NAV */}
