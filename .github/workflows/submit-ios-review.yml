@@ -221,27 +221,86 @@ jobs:
               }
           })
 
-          # If v1 fails with phantom submission error, try v2 API (appStoreReviewSubmissions)
+          # If v1 fails with phantom submission error, try alternative submission endpoints
           if result is None and "does not allow 'CREATE'" in str(text):
               print("")
-              print("v1 API blocked by phantom submission. Trying v2 review submission API...")
-              # The v2 endpoint uses appStoreReviewSubmissions which submits the entire app version
-              v2_result = requests.post(f"{base_url}/appStoreReviewSubmissions", headers=headers, json={
-                  "data": {
-                      "type": "appStoreReviewSubmissions",
-                      "relationships": {
-                          "appStoreVersion": {
-                              "data": {"type": "appStoreVersions", "id": version_id}
+              print("v1 API blocked by phantom submission. Trying alternative endpoints...")
+
+              # Try 1: reviewSubmissions endpoint (newer ASC API)
+              for endpoint_name, endpoint_data in [
+                  ("reviewSubmissions", {
+                      "data": {
+                          "type": "reviewSubmissions",
+                          "attributes": {"platform": "IOS"},
+                          "relationships": {
+                              "items": {
+                                  "data": [{"type": "reviewSubmissionItems", "id": "${NEW}"}]
+                              }
                           }
                       }
-                  }
-              })
-              print(f"  v2 API response: {v2_result.status_code}")
-              if v2_result.status_code in (200, 201):
-                  result = v2_result.json()
-                  print("  v2 submission succeeded!")
-              else:
-                  print(f"  v2 API also failed: {v2_result.text}")
+                  }),
+                  # Try 2: direct reviewSubmissions with just the platform
+                  ("reviewSubmissions (simple)", None),
+              ]:
+                  if endpoint_name == "reviewSubmissions (simple)":
+                      # Try creating a review submission without items
+                      v2_result = requests.post(f"{base_url}/reviewSubmissions", headers=headers, json={
+                          "data": {
+                              "type": "reviewSubmissions",
+                              "attributes": {"platform": "IOS"},
+                              "relationships": {
+                                  "app": {"data": {"type": "apps", "id": app_id}}
+                              }
+                          }
+                      })
+                  else:
+                      v2_result = requests.post(f"{base_url}/reviewSubmissions", headers=headers, json={
+                          "data": {
+                              "type": "reviewSubmissions",
+                              "attributes": {"platform": "IOS"},
+                              "relationships": {
+                                  "app": {"data": {"type": "apps", "id": app_id}}
+                              }
+                          }
+                      })
+
+                  print(f"  {endpoint_name}: {v2_result.status_code}")
+                  if v2_result.status_code in (200, 201):
+                      rs_data = v2_result.json()
+                      rs_id = rs_data["data"]["id"]
+                      print(f"  Review submission created: {rs_id}")
+                      # Add the version as a review submission item
+                      item_result = requests.post(f"{base_url}/reviewSubmissionItems", headers=headers, json={
+                          "data": {
+                              "type": "reviewSubmissionItems",
+                              "relationships": {
+                                  "reviewSubmission": {"data": {"type": "reviewSubmissions", "id": rs_id}},
+                                  "appStoreVersion": {"data": {"type": "appStoreVersions", "id": version_id}}
+                              }
+                          }
+                      })
+                      print(f"  Add item: {item_result.status_code}")
+                      if item_result.status_code in (200, 201):
+                          # Now submit the review submission
+                          submit_result = requests.patch(f"{base_url}/reviewSubmissions/{rs_id}", headers=headers, json={
+                              "data": {
+                                  "type": "reviewSubmissions",
+                                  "id": rs_id,
+                                  "attributes": {"submitted": True}
+                              }
+                          })
+                          print(f"  Submit review: {submit_result.status_code}")
+                          if submit_result.status_code in (200, 204):
+                              result = submit_result.json() if submit_result.status_code == 200 else {"success": True}
+                              print("  Submission succeeded via reviewSubmissions API!")
+                              break
+                          else:
+                              print(f"  Submit failed: {submit_result.text}")
+                      else:
+                          print(f"  Add item failed: {item_result.text}")
+                  else:
+                      print(f"  Failed: {v2_result.text[:200]}")
+                  break  # Only try once since both entries use same endpoint
 
           if result is None:
               print("")
