@@ -46,6 +46,14 @@ export const calculateSetTarget = (lastWeight, lastReps, phase, readiness) => {
   return { weight: targetWeight, reps: targetReps };
 };
 
+export const estimate1RM = (weight, reps) => {
+  if (!weight || !reps || reps < 1) return 0;
+  const w = parseFloat(weight);
+  const r = parseInt(reps);
+  if (r === 1) return w;
+  return Math.round(w * (1 + r / 30) * 10) / 10;
+};
+
 export const parseAIResponse = (text) => {
   try {
     const startIndex = text.indexOf('{');
