@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, LogOut, Shield, FileText, Info, ExternalLink, Trash2, Cloud, CloudOff, Eye, EyeOff, Loader2, UserX } from 'lucide-react';
+import { X, LogOut, Shield, FileText, Info, ExternalLink, Trash2, Cloud, CloudOff, Eye, EyeOff, Loader2, UserX, Heart } from 'lucide-react';
 import { APP_VERSION } from '../constants';
 
 export const SettingsPanel = ({ show, onClose, onLogout, onDeleteAccount, userEmail, requestConfirm, onAuth, onForgotPassword, authLoading, authError }) => {
@@ -89,6 +89,23 @@ export const SettingsPanel = ({ show, onClose, onLogout, onDeleteAccount, userEm
               {authError && <p className="text-red-400 text-xs px-1">{authError}</p>}
             </div>
           )}
+        </div>
+
+        {/* Apple Health */}
+        <div className="mb-6">
+          <p className="text-[10px] text-gray-600 font-bold uppercase tracking-wider mb-3">Apple Health</p>
+          <div className="bg-gray-900/50 p-4 rounded-xl border border-gray-800/50">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-8 h-8 bg-red-500/15 rounded-lg flex items-center justify-center">
+                <Heart size={16} className="text-red-400"/>
+              </div>
+              <div>
+                <p className="text-sm text-white font-bold">Apple Health Integration</p>
+                <p className="text-[10px] text-gray-500">Powered by HealthKit</p>
+              </div>
+            </div>
+            <p className="text-xs text-gray-400 leading-relaxed">GhostLog reads steps, active energy, and workout data from Apple Health to auto-fill your daily check-in. Your health data stays on-device and is never uploaded to our servers.</p>
+          </div>
         </div>
 
         {/* Links */}

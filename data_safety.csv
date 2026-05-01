@@ -1,0 +1,29 @@
+Question ID (machine readable - do not modify),Question (human readable - do not modify),Answer ID (machine readable - do not modify),Answer (human readable - do not modify),Answer requirement (machine readable - do not modify)
+PSL_DATA_COLLECTION_COLLECTS_PERSONAL_DATA,Does your app collect or share any of the required user data types?,TRUE,Yes,MAYBE_REQUIRED
+PSL_DATA_COLLECTION_ENCRYPTED_IN_TRANSIT,Is all of the user data collected by your app encrypted in transit?,TRUE,Yes,MAYBE_REQUIRED
+PSL_DATA_COLLECTION_DELETION_MECHANISM,Do you provide a way for users to request that their data be deleted?,DATA_RETENTION_USER_CONTROL,Yes,MAYBE_REQUIRED
+PSL_DATA_COLLECTION_ACCOUNT_CREATION_METHOD_1,Account creation method,USERNAME_AND_PASSWORD,Username and password,MAYBE_REQUIRED
+PSL_DATA_COLLECTION_ACCOUNT_CREATION_METHOD_2,Account creation method,OAUTH,OAuth,MAYBE_REQUIRED
+PSL_DATA_COLLECTION_ACCOUNT_DELETION_URL,Delete account URL,https://ghost-log.vercel.app/privacy.html,,MAYBE_REQUIRED
+PSL_DATA_COLLECTION_DATA_DELETION_URL,Delete data URL,https://ghost-log.vercel.app/privacy.html,,MAYBE_REQUIRED
+PSL_DATA_TYPE_PERSONAL_INFO_EMAIL,Email address,DATA_TYPE_SELECT,Selected,REQUIRED
+PSL_DATA_TYPE_HEALTH_AND_FITNESS_HEALTH,Health info,DATA_TYPE_SELECT,Selected,REQUIRED
+PSL_DATA_TYPE_HEALTH_AND_FITNESS_FITNESS,Fitness info,DATA_TYPE_SELECT,Selected,REQUIRED
+PSL_DATA_TYPE_PHOTOS_AND_VIDEOS_PHOTOS,Photos,DATA_TYPE_SELECT,Selected,REQUIRED
+PSL_DATA_USAGE_PERSONAL_INFO_EMAIL_COLLECTED,Is this data collected shared or both? (Email address),COLLECTED,Collected,REQUIRED
+PSL_DATA_USAGE_PERSONAL_INFO_EMAIL_EPHEMERAL,Is this data processed ephemerally? (Email address),FALSE,No,REQUIRED
+PSL_DATA_USAGE_PERSONAL_INFO_EMAIL_REQUIRED,Is this data required for your app or can users choose whether it's collected? (Email address),OPTIONAL,Users can choose whether this data is collected,REQUIRED
+PSL_DATA_USAGE_PERSONAL_INFO_EMAIL_PURPOSE_1,Why is this user data collected? (Email address),APP_FUNCTIONALITY,App functionality,REQUIRED
+PSL_DATA_USAGE_PERSONAL_INFO_EMAIL_PURPOSE_2,Why is this user data collected? (Email address),ACCOUNT_MANAGEMENT,Account management,REQUIRED
+PSL_DATA_USAGE_HEALTH_AND_FITNESS_HEALTH_COLLECTED,Is this data collected shared or both? (Health info),COLLECTED,Collected,REQUIRED
+PSL_DATA_USAGE_HEALTH_AND_FITNESS_HEALTH_EPHEMERAL,Is this data processed ephemerally? (Health info),FALSE,No,REQUIRED
+PSL_DATA_USAGE_HEALTH_AND_FITNESS_HEALTH_REQUIRED,Is this data required for your app or can users choose whether it's collected? (Health info),REQUIRED,Data collection is required,REQUIRED
+PSL_DATA_USAGE_HEALTH_AND_FITNESS_HEALTH_PURPOSE_1,Why is this user data collected? (Health info),APP_FUNCTIONALITY,App functionality,REQUIRED
+PSL_DATA_USAGE_HEALTH_AND_FITNESS_FITNESS_COLLECTED,Is this data collected shared or both? (Fitness info),COLLECTED,Collected,REQUIRED
+PSL_DATA_USAGE_HEALTH_AND_FITNESS_FITNESS_EPHEMERAL,Is this data processed ephemerally? (Fitness info),FALSE,No,REQUIRED
+PSL_DATA_USAGE_HEALTH_AND_FITNESS_FITNESS_REQUIRED,Is this data required for your app or can users choose whether it's collected? (Fitness info),REQUIRED,Data collection is required,REQUIRED
+PSL_DATA_USAGE_HEALTH_AND_FITNESS_FITNESS_PURPOSE_1,Why is this user data collected? (Fitness info),APP_FUNCTIONALITY,App functionality,REQUIRED
+PSL_DATA_USAGE_PHOTOS_AND_VIDEOS_PHOTOS_COLLECTED,Is this data collected shared or both? (Photos),COLLECTED,Collected,REQUIRED
+PSL_DATA_USAGE_PHOTOS_AND_VIDEOS_PHOTOS_EPHEMERAL,Is this data processed ephemerally? (Photos),TRUE,Yes,REQUIRED
+PSL_DATA_USAGE_PHOTOS_AND_VIDEOS_PHOTOS_REQUIRED,Is this data required for your app or can users choose whether it's collected? (Photos),OPTIONAL,Users can choose whether this data is collected,REQUIRED
+PSL_DATA_USAGE_PHOTOS_AND_VIDEOS_PHOTOS_PURPOSE_1,Why is this user data collected? (Photos),APP_FUNCTIONALITY,App functionality,REQUIRED

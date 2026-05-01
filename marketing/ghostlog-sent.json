@@ -1,0 +1,247 @@
+[
+  {
+    "to": "tips@appadvice.com",
+    "subject": "AI fitness app that scans food photos for macros \u2014 review copy available",
+    "type": "reviewer",
+    "time": "2026-04-21T13:30:31",
+    "msg_id": "19dae16ec58c8d71"
+  },
+  {
+    "to": "hello@makeuseof.com",
+    "subject": "New AI fitness app \u2014 photo-to-macros + AI meal generator",
+    "type": "reviewer",
+    "time": "2026-04-21T13:30:34",
+    "msg_id": "19dae16f6e33e220"
+  },
+  {
+    "to": "tips@lifehacker.com.au",
+    "subject": "Aussie-built AI fitness app \u2014 snap food photos, get instant macros",
+    "type": "reviewer",
+    "time": "2026-04-21T13:30:36",
+    "msg_id": "19dae1701480c680"
+  },
+  {
+    "to": "editorial@techradar.com",
+    "subject": "GhostLog \u2014 AI fitness app with photo-to-macro scanning",
+    "type": "reviewer",
+    "time": "2026-04-21T13:30:39",
+    "msg_id": "19dae170bbf90a58"
+  },
+  {
+    "to": "tips@9to5mac.com",
+    "subject": "New iOS fitness app with AI food scanning \u2014 review build available",
+    "type": "reviewer",
+    "time": "2026-04-21T13:30:42",
+    "msg_id": "19dae171740b1b12"
+  },
+  {
+    "to": "news@androidpolice.com",
+    "subject": "GhostLog for Android \u2014 AI fitness tracker with food photo scanning",
+    "type": "reviewer",
+    "time": "2026-04-21T13:30:44",
+    "msg_id": "19dae171eb62857a"
+  },
+  {
+    "to": "hello@idownloadblog.com",
+    "subject": "AI-powered fitness app for iOS \u2014 photo scanning + macro tracking",
+    "type": "reviewer",
+    "time": "2026-04-21T13:30:47",
+    "msg_id": "19dae1729c8a705c"
+  },
+  {
+    "to": "tips@cultofmac.com",
+    "subject": "GhostLog \u2014 AI fitness app built solo by a 20yo Aussie dev",
+    "type": "reviewer",
+    "time": "2026-04-21T13:30:49",
+    "msg_id": "19dae17322842469"
+  },
+  {
+    "to": "contact@appleinsider.com",
+    "subject": "New AI fitness app \u2014 Ghost Chef generates recipes from your macro budget",
+    "type": "reviewer",
+    "time": "2026-04-21T13:30:52",
+    "msg_id": "19dae173fbf0338c"
+  },
+  {
+    "to": "hello@producthunt.com",
+    "subject": "GhostLog \u2014 AI fitness tracker launching soon, seeking hunter",
+    "type": "reviewer",
+    "time": "2026-04-21T13:30:54",
+    "msg_id": "19dae17465e04731"
+  },
+  {
+    "to": "info@bodybuilding.com.au",
+    "subject": "AI macro tracking app \u2014 snap a photo, get instant macros",
+    "type": "reviewer",
+    "time": "2026-04-21T13:30:57",
+    "msg_id": "19dae17518d2dea3"
+  },
+  {
+    "to": "hello@fitnessfirst.com.au",
+    "subject": "Free AI fitness app for your members \u2014 GhostLog",
+    "type": "gym",
+    "time": "2026-04-21T13:30:59",
+    "msg_id": "19dae175bb8288a7"
+  },
+  {
+    "to": "info@anytimefitness.com.au",
+    "subject": "AI nutrition tracker your members will love \u2014 free to try",
+    "type": "gym",
+    "time": "2026-04-21T13:31:02",
+    "msg_id": "19dae1764583ed53"
+  },
+  {
+    "to": "enquiries@f45training.com.au",
+    "subject": "AI macro tracker for F45 members \u2014 photo scanning + workout logger",
+    "type": "gym",
+    "time": "2026-04-21T13:31:04",
+    "msg_id": "19dae176f6d64c17"
+  },
+  {
+    "to": "info@plusfitness.com.au",
+    "subject": "Free AI fitness app for your gym members",
+    "type": "gym",
+    "time": "2026-04-21T13:31:07",
+    "msg_id": "19dae1779f558fda"
+  },
+  {
+    "to": "hello@goldsgymbris.com.au",
+    "subject": "AI fitness app built in Brisbane \u2014 GhostLog for your members",
+    "type": "gym",
+    "time": "2026-04-21T13:31:09",
+    "msg_id": "19dae1780c45eedb"
+  },
+  {
+    "to": "info@goodlifehealthclubs.com.au",
+    "subject": "AI nutrition + workout tracker for Goodlife members",
+    "type": "gym",
+    "time": "2026-04-21T13:31:12",
+    "msg_id": "19dae178b0c6997a"
+  },
+  {
+    "to": "info@worldgym.com.au",
+    "subject": "GhostLog \u2014 AI fitness app your members will actually use",
+    "type": "gym",
+    "time": "2026-04-21T13:31:14",
+    "msg_id": "19dae17959819a47"
+  },
+  {
+    "to": "hello@cleanhealth.com.au",
+    "subject": "AI macro tracker for your PT clients \u2014 GhostLog",
+    "type": "trainer",
+    "time": "2026-04-21T13:31:17",
+    "msg_id": "19dae179f3a3fe32"
+  },
+  {
+    "to": "info@australianinstituteoffitness.com.au",
+    "subject": "AI fitness app for personal trainers \u2014 free Pro access",
+    "type": "trainer",
+    "time": "2026-04-21T13:31:19",
+    "msg_id": "19dae17a9b88f230"
+  },
+  {
+    "to": "enquiries@fitnessaustralia.com.au",
+    "subject": "AI-powered client tracking app for Australian PTs",
+    "type": "trainer",
+    "time": "2026-04-21T13:31:22",
+    "msg_id": "19dae17b296430b6"
+  },
+  {
+    "to": "hello@ptacademy.com.au",
+    "subject": "GhostLog \u2014 AI app that helps PT clients track macros automatically",
+    "type": "trainer",
+    "time": "2026-04-21T13:31:25",
+    "msg_id": "19dae17bd798c081"
+  },
+  {
+    "to": "info@nutritionaustralia.org",
+    "subject": "AI nutrition app \u2014 photo scanning returns instant macros",
+    "type": "reviewer",
+    "time": "2026-04-21T13:31:27",
+    "msg_id": "19dae17c6ceece7e"
+  },
+  {
+    "to": "business@jeffnippard.com",
+    "subject": "AI fitness app \u2014 photo-to-macros + AI meal generator \u2014 review offer",
+    "type": "influencer",
+    "time": "2026-04-21T13:31:30",
+    "msg_id": "19dae17d068604f0"
+  },
+  {
+    "to": "hello@natacha-oceane.com",
+    "subject": "AI fitness app with instant food photo scanning \u2014 free Pro access",
+    "type": "influencer",
+    "time": "2026-04-21T13:31:32",
+    "msg_id": "19dae17dbe11ff21"
+  },
+  {
+    "to": "info@buffbunny.com",
+    "subject": "GhostLog \u2014 AI fitness app your audience will love",
+    "type": "influencer",
+    "time": "2026-04-21T13:31:35",
+    "msg_id": "19dae17e55821991"
+  },
+  {
+    "to": "editorial@womenshealthmag.com.au",
+    "subject": "AI fitness app from Brisbane \u2014 snap food photos for instant macros",
+    "type": "reviewer",
+    "time": "2026-04-21T13:31:37",
+    "msg_id": "19dae17ee239d7ed"
+  },
+  {
+    "to": "editorial@menshealth.com.au",
+    "subject": "AI-powered fitness app built by a 20yo Aussie \u2014 GhostLog",
+    "type": "reviewer",
+    "time": "2026-04-21T13:31:40",
+    "msg_id": "19dae17f92d49d18"
+  },
+  {
+    "to": "editorial@bodyandsoul.com.au",
+    "subject": "New AI fitness app \u2014 take a photo, get instant nutrition info",
+    "type": "reviewer",
+    "time": "2026-04-21T13:31:42",
+    "msg_id": "19dae180259c11c4"
+  },
+  {
+    "to": "info@insidefitnessmagazine.com.au",
+    "subject": "GhostLog \u2014 AI fitness tracker with Ghost Chef meal generator",
+    "type": "reviewer",
+    "time": "2026-04-21T13:31:45",
+    "msg_id": "19dae180d3074ea3"
+  },
+  {
+    "to": "hello@coachmagazine.com.au",
+    "subject": "AI fitness app review opportunity \u2014 GhostLog",
+    "type": "reviewer",
+    "time": "2026-04-21T13:31:47",
+    "msg_id": "19dae181655c9411"
+  },
+  {
+    "to": "tips@gizmodo.com.au",
+    "subject": "Aussie-built AI fitness app \u2014 photo-to-macros in seconds",
+    "type": "reviewer",
+    "time": "2026-04-21T13:31:50",
+    "msg_id": "19dae18216c82e5c"
+  },
+  {
+    "to": "editorial@techaustralia.com.au",
+    "subject": "GhostLog \u2014 AI fitness app built solo in Brisbane",
+    "type": "reviewer",
+    "time": "2026-04-21T13:31:52",
+    "msg_id": "19dae182bbd4a07e"
+  },
+  {
+    "to": "hello@startupdaily.net",
+    "subject": "Solo dev ships AI fitness app to iOS + Android \u2014 GhostLog",
+    "type": "reviewer",
+    "time": "2026-04-21T13:31:55",
+    "msg_id": "19dae1834ce3c0c7"
+  },
+  {
+    "to": "tips@smartcompany.com.au",
+    "subject": "20yo Brisbane dev builds AI fitness app with 8 features in 2 weeks",
+    "type": "reviewer",
+    "time": "2026-04-21T13:31:57",
+    "msg_id": "19dae183f52b937d"
+  }
+]

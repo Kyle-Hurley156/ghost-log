@@ -1,0 +1,25 @@
+rules_version = '2';
+
+// GhostLog Firestore security rules.
+// Replaces the expired test-mode rules from Apr 1.
+//
+// Data model (from src/App.jsx getUserRef):
+//   artifacts/{appId}/users/{uid}/userData/backup
+//
+// Only the authenticated user can read or write their own backup doc.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // User-owned data under artifacts/{appId}/users/{userId}/...
+    match /artifacts/{appId}/users/{userId}/{document=**} {
+      allow read, write: if request.auth != null
+                         && request.auth.uid == userId;
+    }
+
+    // Default deny everything else
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

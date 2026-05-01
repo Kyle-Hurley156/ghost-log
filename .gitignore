@@ -40,3 +40,9 @@ test-results/
 
 # Temporary screenshots
 IMG_*.png
+screenshot-*.png
+shopify-setup.py
+omnishift_leads_real.json
+
+# Claude Code
+.claude/

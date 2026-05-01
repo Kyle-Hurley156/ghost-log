@@ -1124,6 +1124,11 @@ export default function App() {
                   {cloudStatus === 'synced' ? <Cloud size={11} className="accent-text"/> : cloudStatus === 'syncing' ? <Loader2 size={11} className="animate-spin text-gray-400"/> : <CloudOff size={11} className="text-gray-500"/>}
                   {cloudStatus === 'synced' ? 'Synced' : cloudStatus === 'syncing' ? 'Syncing...' : !cloudUser ? 'Local Only' : 'Local'}
                 </div>
+                {!cloudUser && (
+                  <button onClick={() => setShowSettings(true)} className="text-[10px] font-bold accent-text uppercase tracking-widest hover:underline">
+                    Sign in
+                  </button>
+                )}
                 {workoutStreak > 0 && (
                   <span className="text-[10px] font-bold text-orange-400 flex items-center gap-0.5 bg-orange-500/10 px-2 py-0.5 rounded-md border border-orange-500/20">
                     🔥 {workoutStreak}
